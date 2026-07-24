@@ -26,6 +26,11 @@ public class PunishmentManager {
     private final Map<String, String> banIssuers = new ConcurrentHashMap<>();
     private final Map<String, String> banReasons = new ConcurrentHashMap<>();
 
+    // Список разрешённых команд во время мута
+    private final List<String> allowedCommands = Arrays.asList(
+        "msg", "tell", "r", "reply", "help", "pay", "balance", "bal"
+    );
+
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
 
     public PunishmentManager(JavaPlugin plugin, AdminLogger adminLogger) {
@@ -167,7 +172,7 @@ public class PunishmentManager {
     }
 
     // ============================================
-    // ==== БАН (КАСТОМНЫЙ, БЕЗ КОНСОЛЬНЫХ КОМАНД) =====
+    // ==== БАН (КАСТОМНЫЙ) =====
     // ============================================
     public boolean banPlayer(String playerName, String issuer, String reason, String duration) {
         return banPlayer(playerName, issuer, reason, duration, false);
@@ -201,8 +206,6 @@ public class PunishmentManager {
             banReasons.put(finalPlayerName, finalReason);
             saveHistory();
 
-            // ❌ НЕТ КОНСОЛЬНЫХ КОМАНД — ТОЛЬКО КАСТОМНАЯ СИСТЕМА
-
             // Кикаем игрока с красивым сообщением
             Player player = Bukkit.getPlayer(finalPlayerName);
             if (player != null && player.isOnline()) {
@@ -231,7 +234,7 @@ public class PunishmentManager {
     }
 
     // ============================================
-    // ==== РАЗБАН (БЕЗ КОНСОЛЬНЫХ КОМАНД) =====
+    // ==== РАЗБАН =====
     // ============================================
     public boolean unbanPlayer(String playerName, String issuer, String reason) {
         if (!isBanned(playerName)) {
@@ -247,8 +250,6 @@ public class PunishmentManager {
             banIssuers.remove(finalPlayerName);
             banReasons.remove(finalPlayerName);
             saveHistory();
-
-            // ❌ НЕТ КОНСОЛЬНЫХ КОМАНД
 
             String msg = "§fИгрок §9" + finalIssuer + " §aразбанил §c" + finalPlayerName +
                     " §fпо причине: §7" + finalReason;
@@ -297,7 +298,17 @@ public class PunishmentManager {
             muteReasons.put(finalPlayerName, finalReason);
             saveHistory();
 
-            // ❌ НЕТ КОНСОЛЬНЫХ КОМАНД
+            // Отправляем уведомление игроку
+            Player player = Bukkit.getPlayer(finalPlayerName);
+            if (player != null && player.isOnline()) {
+                String expiryStr = expiry == -1 ? "навсегда" : formatTimeLeft(expiry);
+                String muteMessage = "§c§lВам заблокировали чат!\n" +
+                        "\n" +
+                        "§fПричина: §c" + finalReason + "\n" +
+                        "§fВыдал: §9" + finalIssuer + "\n" +
+                        "§fИстекает через: §c" + expiryStr;
+                player.sendMessage(muteMessage);
+            }
 
             if (!finalHidden) {
                 String msg = "§fИгрок §9" + finalIssuer + " §fзамутил §c" + finalPlayerName +
@@ -331,11 +342,14 @@ public class PunishmentManager {
             muteReasons.remove(finalPlayerName);
             saveHistory();
 
-            // ❌ НЕТ КОНСОЛЬНЫХ КОМАНД
-
             String msg = "§fИгрок §9" + finalIssuer + " §aразмутил §c" + finalPlayerName +
                     " §fпо причине: §7" + finalReason;
             Bukkit.broadcastMessage(msg);
+
+            Player player = Bukkit.getPlayer(finalPlayerName);
+            if (player != null && player.isOnline()) {
+                player.sendMessage("§aВаш мут был снят!");
+            }
 
             if (adminLogger != null) {
                 adminLogger.log("UNMUTE", finalPlayerName, finalIssuer, finalReason, "навсегда", "ПУБЛИЧНО");
@@ -393,7 +407,64 @@ public class PunishmentManager {
     }
 
     // ============================================
-    // ==== GET LAST BAN =====
+    // ==== ПОЛНАЯ БЛОКИРОВКА ПРИ МУТЕ =====
+    // ============================================
+    
+    /**
+     * Проверяет, может ли игрок писать в чат
+     * @return true если может, false если заблокирован
+     */
+    public boolean canPlayerChat(Player player) {
+        if (player == null) return true;
+        String playerName = player.getName();
+        
+        if (isMuted(playerName)) {
+            String msg = getMuteMessage(playerName);
+            if (msg != null) {
+                player.sendMessage(msg);
+            }
+            return false; // ❌ ЧАТ ЗАБЛОКИРОВАН
+        }
+        return true;
+    }
+
+    /**
+     * Проверяет, может ли игрок использовать команду
+     * @param player игрок
+     * @param command команда (без /)
+     * @return true если можно, false если заблокировано
+     */
+    public boolean canUseCommand(Player player, String command) {
+        if (player == null) return true;
+        String playerName = player.getName();
+        
+        if (isMuted(playerName)) {
+            // Проверяем, разрешена ли команда
+            String cmdLower = command.toLowerCase();
+            for (String allowed : allowedCommands) {
+                if (cmdLower.startsWith(allowed)) {
+                    return true; // Разрешённая команда
+                }
+            }
+            
+            // Блокируем команду
+            player.sendMessage("§cВы не можете использовать команды во время мута!");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Полная проверка блокировки действий
+     * @return true если всё заблокировано
+     */
+    public boolean isActionBlocked(Player player) {
+        if (player == null) return false;
+        return isMuted(player.getName());
+    }
+
+    // ============================================
+    // ==== GETTERS =====
     // ============================================
     public HistoryEntry getLastBan(String playerName) {
         List<HistoryEntry> list = history.get(playerName);
@@ -406,9 +477,6 @@ public class PunishmentManager {
         return null;
     }
 
-    // ============================================
-    // ==== GET LAST MUTE =====
-    // ============================================
     public HistoryEntry getLastMute(String playerName) {
         List<HistoryEntry> list = history.get(playerName);
         if (list == null || list.isEmpty()) return null;
@@ -420,9 +488,6 @@ public class PunishmentManager {
         return null;
     }
 
-    // ============================================
-    // ==== СПИСКИ =====
-    // ============================================
     public List<String> getBanList() {
         return getBanList(1, Integer.MAX_VALUE);
     }
@@ -465,16 +530,10 @@ public class PunishmentManager {
         return result;
     }
 
-    // ============================================
-    // ==== ИСТОРИЯ =====
-    // ============================================
     public List<HistoryEntry> getHistory(String playerName) {
         return history.getOrDefault(playerName, new ArrayList<>());
     }
 
-    // ============================================
-    // ==== ПРОВЕРКИ =====
-    // ============================================
     public boolean isBanned(String playerName) {
         Long expiry = bans.get(playerName);
         if (expiry == null) return false;
@@ -505,14 +564,6 @@ public class PunishmentManager {
         if (time == null) return false;
         if (time.equals("навсегда")) return true;
         return time.matches("\\d+[smhdwMy]");
-    }
-
-    // ============================================
-    // ==== ДЛЯ CHAT =====
-    // ============================================
-    public boolean canPlayerChat(Player player) {
-        if (player == null) return true;
-        return !isMuted(player.getName());
     }
 
     public String getMuteIssuer(String playerName) {
@@ -567,11 +618,13 @@ public class PunishmentManager {
         String reason = muteReasons.get(playerName);
         String expiryStr = expiry == -1 ? "навсегда" : formatTimeLeft(expiry);
 
-        return "§c§lУ вас имеется активный мут!\n" +
+        return "§c§lВам заблокировали чат!\n" +
                 "\n" +
                 "§fПричина: §c" + reason + "\n" +
                 "§fВыдал: §9" + issuer + "\n" +
-                "§fИстекает через: §c" + expiryStr;
+                "§fИстекает через: §c" + expiryStr + "\n" +
+                "\n" +
+                "§7Вы не можете писать в чат и использовать команды!";
     }
 
     public boolean checkOnJoin(Player player) {
