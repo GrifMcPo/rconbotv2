@@ -1,6 +1,7 @@
-package com.grifmcpo.consolebot;   
+package com.grifmcpo.consolebot;  
 
 import org.bukkit.Bukkit;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -49,8 +50,11 @@ public class TelegramConsoleBot extends JavaPlugin {
 
         Bukkit.getPluginManager().registerEvents(new CommandListener(commandLogger, punishmentManager), this);
 
-        // ===== РЕГИСТРАЦИЯ НОВОЙ КОМАНДЫ =====
-        getCommand("pex").setExecutor(new PexCommand(this));
+        // ===== РЕГИСТРАЦИЯ КОМАНДЫ /pex =====
+        PluginCommand pexCommand = getCommand("pex");
+        if (pexCommand != null) {
+            pexCommand.setExecutor(new PexCommand(this));
+        }
 
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
