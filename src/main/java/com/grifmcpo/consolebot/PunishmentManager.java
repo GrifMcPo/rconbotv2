@@ -43,7 +43,7 @@ public class PunishmentManager implements Listener {
         loadHistory();
         loadActivePunishments();
         startExpiryChecker();
-        // Регистрируем события
+        // ===== РЕГИСТРИРУЕМ ЛИСТЕНЕР =====
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -178,7 +178,7 @@ public class PunishmentManager implements Listener {
     }
 
     // ============================================
-    // ==== БАН (КАСТОМНЫЙ) =====
+    // ==== БАН =====
     // ============================================
     public boolean banPlayer(String playerName, String issuer, String reason, String duration) {
         return banPlayer(playerName, issuer, reason, duration, false);
@@ -270,7 +270,7 @@ public class PunishmentManager implements Listener {
     }
 
     // ============================================
-    // ==== МУТ (КАСТОМНЫЙ) =====
+    // ==== МУТ =====
     // ============================================
     public boolean mutePlayer(String playerName, String issuer, String reason, String duration) {
         return mutePlayer(playerName, issuer, reason, duration, false);
@@ -451,7 +451,6 @@ public class PunishmentManager implements Listener {
         String command = event.getMessage().substring(1).split(" ")[0];
 
         if (isMuted(player.getName())) {
-            // Проверяем, разрешена ли команда
             String cmdLower = command.toLowerCase();
             for (String allowed : allowedCommands) {
                 if (cmdLower.startsWith(allowed)) {
