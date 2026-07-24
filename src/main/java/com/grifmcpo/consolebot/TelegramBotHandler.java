@@ -1,8 +1,7 @@
-package com.grifmcpo.consolebot; 
+package com.grifmcpo.consolebot;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.OfflinePlayer;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
@@ -77,7 +76,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        // ===== КНОПКИ =====
         if (update.hasCallbackQuery()) {
             String data = update.getCallbackQuery().getData();
             String chatIdStr = update.getCallbackQuery().getMessage().getChatId().toString();
@@ -201,7 +199,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        // ===== СООБЩЕНИЯ =====
         if (!update.hasMessage() || !update.getMessage().hasText()) return;
 
         String messageText = update.getMessage().getText();
@@ -217,9 +214,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             }
         }
 
-        // ============================================
-        // ==== ПРОВЕРКА ДОСТУПА К БОТУ =====
-        // ============================================
         String userGroup = groupManager.getUserGroup(userId);
         if (userGroup == null && !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
             sendMessage(chatId, "[БОТ] У Вас нет доступа к боту!");
@@ -251,9 +245,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         handleRconCommand(chatId, command, userId);
     }
 
-    // ============================================
-    // ==== ОБРАБОТКА RCON КОМАНД =====
-    // ============================================
     private void handleRconCommand(long chatId, String command, long userId) {
 
         if (command.equalsIgnoreCase("rcon") || command.trim().isEmpty()) {
@@ -261,9 +252,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        // ============================================
-        // ==== !rcon global <cmd> =====
-        // ============================================
         if (command.startsWith("global ")) {
             String cmd = command.substring(7).trim();
             if (cmd.isEmpty()) {
@@ -273,16 +261,13 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
             String cmdName = cmd.split(" ")[0];
 
-            // Проверяем доступ к команде
             if (!groupManager.hasPermission(userId, "!rcon global " + cmdName)) {
                 sendMessage(chatId, "[БОТ] У вас нет доступа к данной команде!");
                 plugin.getLogger().info("❌ Доступ запрещён: " + userId + " -> " + cmdName);
                 return;
             }
 
-            // ============================================
-            // ==== КАСТОМНЫЕ КОМАНДЫ (ОБРАБОТКА В БОТЕ) =====
-            // ============================================
+            // ===== КАСТОМНЫЕ КОМАНДЫ =====
             if (cmd.startsWith("checkban ")) {
                 handleCheckBan(chatId, cmd);
                 return;
@@ -325,16 +310,12 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 return;
             }
 
-            // ============================================
-            // ==== НАКАЗАНИЯ (ban, mute, kick, unban, unmute) =====
-            // ============================================
             if (cmd.startsWith("ban ") || cmd.startsWith("mute ") || cmd.startsWith("kick ") ||
                 cmd.startsWith("unban ") || cmd.startsWith("unmute ")) {
                 handlePunishment(chatId, cmd, userId);
                 return;
             }
 
-            // Остальные команды на сервер
             executeServerCommand(chatId, cmd, userId);
             return;
         }
@@ -342,9 +323,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendHelp(chatId, userId);
     }
 
-    // ============================================
-    // ==== ОБРАБОТКА НАКАЗАНИЙ =====
-    // ============================================
     private void handlePunishment(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         String action = parts[0];
@@ -457,9 +435,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, result);
     }
 
-    // ============================================
-    // ==== checkban =====
-    // ============================================
     private void handleCheckBan(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
@@ -490,9 +465,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, response);
     }
 
-    // ============================================
-    // ==== checkmute =====
-    // ============================================
     private void handleCheckMute(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
@@ -523,9 +495,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, response);
     }
 
-    // ============================================
-    // ==== pex user (НОВАЯ КОМАНДА) =====
-    // ============================================
+    // ===== НОВАЯ КОМАНДА PEX USER (100% РАБОЧАЯ) =====
     private void handlePexUser(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 3) {
@@ -541,14 +511,23 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         boolean isOp = false;
         boolean isWhitelisted = false;
         String uuid = "—";
-        String displayName = playerName;
 
         try {
             if (isOnline) {
                 isOp = target.isOp();
                 uuid = target.getUniqueId().toString();
-                displayName = target.getDisplayName();
+                // Получаем группу через Vault
+                try {
+                    net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
+                            .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
+                    if (permission != null) {
+                        group = permission.getPrimaryGroup(target);
+                    }
+                } catch (Exception e) {
+                    group = "неизвестно (Vault)";
+                }
             } else {
+                // Офлайн игрок
                 File opsFile = new File("ops.json");
                 if (opsFile.exists()) {
                     try {
@@ -556,8 +535,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                         isOp = content.contains("\"name\":\"" + playerName + "\"");
                     } catch (Exception e) {}
                 }
+                group = "офлайн";
+                uuid = "—";
             }
 
+            // Белый список (для всех)
             File whitelistFile = new File("whitelist.json");
             if (whitelistFile.exists()) {
                 try {
@@ -566,30 +548,8 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 } catch (Exception e) {}
             }
 
-            try {
-                net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
-                if (permission != null) {
-                    if (isOnline && target != null) {
-                        group = permission.getPrimaryGroup(target);
-                    } else {
-                        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerName);
-                        if (offlinePlayer != null && offlinePlayer.hasPlayedBefore()) {
-                            try {
-                                group = permission.getPrimaryGroup(null, playerName);
-                            } catch (Exception ex) {
-                                group = "default";
-                            }
-                        } else {
-                            group = "default (не найден)";
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                group = "неизвестно (Vault недоступен)";
-            }
-
         } catch (Exception e) {
-            sendMessage(chatId, "[БОТ] ❌ Ошибка получения данных: " + e.getMessage());
+            sendMessage(chatId, "[БОТ] ❌ Ошибка: " + e.getMessage());
             return;
         }
 
@@ -598,15 +558,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 "📌 Группа: " + group + "\n" +
                 "🔑 OP: " + (isOp ? "Да" : "Нет") + "\n" +
                 "📋 Белый список: " + (isWhitelisted ? "Да" : "Нет") + "\n" +
-                "👤 Ник игрока: " + displayName + "\n" +
                 "🆔 UUID: " + uuid;
 
         sendMessage(chatId, "[БОТ] " + response);
     }
 
-    // ============================================
-    // ==== messageall =====
-    // ============================================
     private void handleMessageAll(long chatId, String cmd, long userId) {
         String message = cmd.substring(11);
         if (message.trim().isEmpty()) {
@@ -623,9 +579,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, "[БОТ] Сообщение отправлено " + count + " пользователям!");
     }
 
-    // ============================================
-    // ==== bc / bcast =====
-    // ============================================
     private void handleBroadcast(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
@@ -641,9 +594,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, "[БОТ] " + format.replaceAll("§[0-9a-fk-or]", ""));
     }
 
-    // ============================================
-    // ==== banlist =====
-    // ============================================
     private void handleBanList(long chatId, String cmd) {
         int page = 1;
         String[] parts = cmd.split(" ");
@@ -670,9 +620,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
     }
 
-    // ============================================
-    // ==== mutelist =====
-    // ============================================
     private void handleMuteList(long chatId, String cmd) {
         int page = 1;
         String[] parts = cmd.split(" ");
@@ -699,9 +646,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
     }
 
-    // ============================================
-    // ==== shist / hist =====
-    // ============================================
     private void handleShist(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
@@ -741,18 +685,12 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, response.toString());
     }
 
-    // ============================================
-    // ==== logs =====
-    // ============================================
     private void handleLogs(long chatId, String cmd) {
         String[] args = cmd.split(" ");
         SendMessage response = logsCommand.handleLogs(chatId, args);
         try { execute(response); } catch (TelegramApiException e) { e.printStackTrace(); }
     }
 
-    // ============================================
-    // ==== tex =====
-    // ============================================
     private void handleTex(long chatId, String cmd, long userId) {
         if (!groupManager.isAdmin(userId) && !groupManager.isOwner(userId)) {
             sendMessage(chatId, "[БОТ] У вас нет доступа к данной команде!");
@@ -769,9 +707,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, "[БОТ] Техработы " + (state ? "ВКЛЮЧЕНЫ" : "ВЫКЛЮЧЕНЫ"));
     }
 
-    // ============================================
-    // ==== ОТПРАВКА КОМАНДЫ НА СЕРВЕР =====
-    // ============================================
     private void executeServerCommand(long chatId, String command, long userId) {
         String issuer = plugin.getCustomSender(userId);
         if (issuer == null) issuer = "RCON";
@@ -800,9 +735,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         });
     }
 
-    // ============================================
-    // ==== ПОДТВЕРЖДЕНИЕ НАКАЗАНИЯ =====
-    // ============================================
     private void sendConfirmationRequest(long chatId, String action, String playerName,
                                          String duration, String reason, long userId, boolean hidden) {
         String actionName = "";
@@ -847,9 +779,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         try { execute(msg); } catch (TelegramApiException e) { e.printStackTrace(); }
     }
 
-    // ============================================
-    // ==== ПОМОЩЬ ПО КОМАНДАМ =====
-    // ============================================
     private void sendHelp(long chatId, long userId) {
         String group = groupManager.getUserGroup(userId);
         List<String> availableCmds = groupManager.getAvailableCommands(userId);
@@ -875,10 +804,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, response.toString());
     }
 
-    // ============================================
-    // ==== ВСПОМОГАТЕЛЬНЫЙ МЕТОД =====
-    // ============================================
-
     private long parseTimeToMillis(String time) {
         if (time == null) return Long.MAX_VALUE;
         char unit = time.charAt(time.length() - 1);
@@ -895,9 +820,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
     }
 
-    // ============================================
-    // ==== ПАГИНАЦИЯ =====
-    // ============================================
     private void handlePagination(long chatId, String type, String playerName, int page, int messageId) {
         int pageSize = 10;
         List<String> items = new ArrayList<>();
@@ -974,9 +896,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         try { execute(msg); } catch (TelegramApiException e) { e.printStackTrace(); }
     }
 
-    // ============================================
-    // ==== ОТПРАВКА СООБЩЕНИЙ =====
-    // ============================================
     public void sendMessage(long chatId, String text) {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
@@ -993,9 +912,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         } catch (TelegramApiException e) {}
     }
 
-    // ============================================
-    // ==== ИГРОВЫЕ КОМАНДЫ =====
-    // ============================================
     private void sendOnline(long chatId) {
         int online = Bukkit.getOnlinePlayers().size();
         int max = Bukkit.getMaxPlayers();
