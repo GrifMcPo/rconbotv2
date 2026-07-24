@@ -1,7 +1,6 @@
 package com.grifmcpo.consolebot;
 
 import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -33,13 +32,20 @@ public class PexCommand implements CommandExecutor {
         boolean isOp = false;
         boolean isWhitelisted = false;
         String uuid = "—";
-        String displayName = playerName;
 
         try {
             if (isOnline) {
                 isOp = target.isOp();
                 uuid = target.getUniqueId().toString();
-                displayName = target.getDisplayName();
+                try {
+                    net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
+                            .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
+                    if (permission != null) {
+                        group = permission.getPrimaryGroup(target);
+                    }
+                } catch (Exception e) {
+                    group = "неизвестно (Vault)";
+                }
             } else {
                 File opsFile = new File("ops.json");
                 if (opsFile.exists()) {
@@ -48,6 +54,8 @@ public class PexCommand implements CommandExecutor {
                         isOp = content.contains("\"name\":\"" + playerName + "\"");
                     } catch (Exception e) {}
                 }
+                group = "офлайн";
+                uuid = "—";
             }
 
             File whitelistFile = new File("whitelist.json");
@@ -58,30 +66,8 @@ public class PexCommand implements CommandExecutor {
                 } catch (Exception e) {}
             }
 
-            try {
-                net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
-                if (permission != null) {
-                    if (isOnline && target != null) {
-                        group = permission.getPrimaryGroup(target);
-                    } else {
-                        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerName);
-                        if (offlinePlayer != null && offlinePlayer.hasPlayedBefore()) {
-                            try {
-                                group = permission.getPrimaryGroup(null, playerName);
-                            } catch (Exception ex) {
-                                group = "default";
-                            }
-                        } else {
-                            group = "default (не найден)";
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                group = "неизвестно (Vault недоступен)";
-            }
-
         } catch (Exception e) {
-            sender.sendMessage("§cОшибка получения данных: " + e.getMessage());
+            sender.sendMessage("§cОшибка: " + e.getMessage());
             return true;
         }
 
@@ -90,7 +76,7 @@ public class PexCommand implements CommandExecutor {
                 "§6📌 Группа: §f" + group + "\n" +
                 "§6🔑 OP: §f" + (isOp ? "§aДа" : "§cНет") + "\n" +
                 "§6📋 Белый список: §f" + (isWhitelisted ? "§aДа" : "§cНет") + "\n" +
-                "§6👤 Ник игрока: §f" + displayName;
+                "§6🆔 UUID: §f" + uuid;
 
         sender.sendMessage(response);
         return true;
