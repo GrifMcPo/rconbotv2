@@ -10,6 +10,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -428,7 +429,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     }
 
     // ============================================
-    // ==== checkban (СТАРЫЙ ФОРМАТ) =====
+    // ==== checkban =====
     // ============================================
     private void handleCheckBan(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
@@ -462,7 +463,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     }
 
     // ============================================
-    // ==== checkmute (СТАРЫЙ ФОРМАТ) =====
+    // ==== checkmute =====
     // ============================================
     private void handleCheckMute(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
@@ -496,7 +497,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     }
 
     // ============================================
-    // ==== pex user (НОВАЯ КОМАНДА) =====
+    // ==== pex user =====
     // ============================================
     private void handlePexUser(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
