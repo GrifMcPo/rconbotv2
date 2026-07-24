@@ -4,6 +4,11 @@ import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -12,7 +17,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class PunishmentManager {
+public class PunishmentManager implements Listener {
 
     private final JavaPlugin plugin;
     private final AdminLogger adminLogger;
@@ -26,7 +31,6 @@ public class PunishmentManager {
     private final Map<String, String> banIssuers = new ConcurrentHashMap<>();
     private final Map<String, String> banReasons = new ConcurrentHashMap<>();
 
-    // Список разрешённых команд во время мута
     private final List<String> allowedCommands = Arrays.asList(
         "msg", "tell", "r", "reply", "help", "pay", "balance", "bal"
     );
@@ -39,6 +43,8 @@ public class PunishmentManager {
         loadHistory();
         loadActivePunishments();
         startExpiryChecker();
+        // Регистрируем события
+        Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
     @SuppressWarnings("unchecked")
@@ -407,60 +413,55 @@ public class PunishmentManager {
     }
 
     // ============================================
-    // ==== ПОЛНАЯ БЛОКИРОВКА ПРИ МУТЕ =====
+    // ==== СОБЫТИЯ (БЛОКИРОВКА) =====
     // ============================================
-    
-    /**
-     * Проверяет, может ли игрок писать в чат
-     * @return true если может, false если заблокирован
-     */
-    public boolean canPlayerChat(Player player) {
-        if (player == null) return true;
+
+    // ===== БЛОКИРОВКА ВХОДА ПРИ БАНЕ =====
+    @EventHandler
+    public void onPlayerLogin(PlayerLoginEvent event) {
+        Player player = event.getPlayer();
         String playerName = player.getName();
-        
-        if (isMuted(playerName)) {
-            String msg = getMuteMessage(playerName);
+
+        if (isBanned(playerName)) {
+            String kickMessage = getFullBanMessage(playerName);
+            if (kickMessage != null) {
+                event.disallow(PlayerLoginEvent.Result.KICK_BANNED, kickMessage);
+            }
+        }
+    }
+
+    // ===== БЛОКИРОВКА ЧАТА ПРИ МУТЕ =====
+    @EventHandler
+    public void onPlayerChat(AsyncPlayerChatEvent event) {
+        Player player = event.getPlayer();
+
+        if (isMuted(player.getName())) {
+            String msg = getMuteMessage(player.getName());
             if (msg != null) {
                 player.sendMessage(msg);
             }
-            return false; // ❌ ЧАТ ЗАБЛОКИРОВАН
+            event.setCancelled(true);
         }
-        return true;
     }
 
-    /**
-     * Проверяет, может ли игрок использовать команду
-     * @param player игрок
-     * @param command команда (без /)
-     * @return true если можно, false если заблокировано
-     */
-    public boolean canUseCommand(Player player, String command) {
-        if (player == null) return true;
-        String playerName = player.getName();
-        
-        if (isMuted(playerName)) {
+    // ===== БЛОКИРОВКА КОМАНД ПРИ МУТЕ =====
+    @EventHandler
+    public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
+        Player player = event.getPlayer();
+        String command = event.getMessage().substring(1).split(" ")[0];
+
+        if (isMuted(player.getName())) {
             // Проверяем, разрешена ли команда
             String cmdLower = command.toLowerCase();
             for (String allowed : allowedCommands) {
                 if (cmdLower.startsWith(allowed)) {
-                    return true; // Разрешённая команда
+                    return; // Разрешено
                 }
             }
-            
-            // Блокируем команду
-            player.sendMessage("§cВы не можете использовать команды во время мута!");
-            return false;
-        }
-        return true;
-    }
 
-    /**
-     * Полная проверка блокировки действий
-     * @return true если всё заблокировано
-     */
-    public boolean isActionBlocked(Player player) {
-        if (player == null) return false;
-        return isMuted(player.getName());
+            event.setCancelled(true);
+            player.sendMessage("§cВы не можете использовать команды во время мута!");
+        }
     }
 
     // ============================================
