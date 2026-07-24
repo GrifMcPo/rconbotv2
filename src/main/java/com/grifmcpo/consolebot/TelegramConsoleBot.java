@@ -49,6 +49,9 @@ public class TelegramConsoleBot extends JavaPlugin {
 
         Bukkit.getPluginManager().registerEvents(new CommandListener(commandLogger, punishmentManager), this);
 
+        // ===== РЕГИСТРАЦИЯ НОВОЙ КОМАНДЫ =====
+        getCommand("pex").setExecutor(new PexCommand(this));
+
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
             botHandler = new TelegramBotHandler(token, this, playerManager, commandLogger, logsCommand,
