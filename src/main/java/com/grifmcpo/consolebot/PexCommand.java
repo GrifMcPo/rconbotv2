@@ -61,12 +61,18 @@ public class PexCommand implements CommandExecutor {
             try {
                 net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
                 if (permission != null) {
-                    if (isOnline) {
+                    if (isOnline && target != null) {
                         group = permission.getPrimaryGroup(target);
                     } else {
                         OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerName);
-                        if (offlinePlayer != null) {
-                            group = permission.getPrimaryGroup(offlinePlayer);
+                        if (offlinePlayer != null && offlinePlayer.hasPlayedBefore()) {
+                            try {
+                                group = permission.getPrimaryGroup(null, playerName);
+                            } catch (Exception ex) {
+                                group = "default";
+                            }
+                        } else {
+                            group = "default (не найден)";
                         }
                     }
                 }
