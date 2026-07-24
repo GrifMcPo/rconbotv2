@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot;   
+package com.grifmcpo.consolebot;  
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
@@ -48,7 +48,10 @@ public class TelegramConsoleBot extends JavaPlugin {
         botBanManager = new BotBanManager(this);
         groupManager = new GroupManager(this);
 
+        // ===== РЕГИСТРАЦИЯ ЛИСТЕНЕРОВ =====
         Bukkit.getPluginManager().registerEvents(new CommandListener(commandLogger, punishmentManager), this);
+        // Листенер НЕ НУЖНО регистрировать отдельно, потому что PunishmentManager САМ регистрирует себя в конструкторе!
+        // Bukkit.getPluginManager().registerEvents(punishmentManager, this); // ← ЭТО УЖЕ ЕСТЬ В КОНСТРУКТОРЕ PunishmentManager!
 
         // ===== РЕГИСТРАЦИЯ КОМАНДЫ /pex =====
         PluginCommand pexCommand = getCommand("pex");
