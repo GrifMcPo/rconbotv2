@@ -37,6 +37,7 @@ public class PexCommand implements CommandExecutor {
             if (isOnline) {
                 isOp = target.isOp();
                 uuid = target.getUniqueId().toString();
+                // Получаем группу только для онлайн игроков
                 try {
                     net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
                             .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
@@ -44,9 +45,13 @@ public class PexCommand implements CommandExecutor {
                         group = permission.getPrimaryGroup(target);
                     }
                 } catch (Exception e) {
-                    group = "неизвестно (Vault)";
+                    group = "неизвестно";
                 }
             } else {
+                // Для офлайн — просто пишем "офлайн", не используем Vault
+                group = "офлайн";
+                uuid = "—";
+                // OP проверяем через ops.json
                 File opsFile = new File("ops.json");
                 if (opsFile.exists()) {
                     try {
@@ -54,10 +59,9 @@ public class PexCommand implements CommandExecutor {
                         isOp = content.contains("\"name\":\"" + playerName + "\"");
                     } catch (Exception e) {}
                 }
-                group = "офлайн";
-                uuid = "—";
             }
 
+            // Белый список проверяем всегда
             File whitelistFile = new File("whitelist.json");
             if (whitelistFile.exists()) {
                 try {
