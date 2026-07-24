@@ -6,7 +6,13 @@ author: GrifMcPo
 description: Бот для управления сервером через Telegram
 
 commands:
-  # ==== КОМАНДЫ В ИГРЕ ====
-  # (все команды из CommandListener)
-  # их НЕ НАДО ПРОПИСЫВАТЬ В plugin.yml, 
-  # они регистрируются через CommandListener
+  pex:
+    description: Информация об игроке
+    usage: /pex user <ник>
+    permission: pex.use
+    aliases: [playerinfo, info]
+
+permissions:
+  pex.use:
+    description: Доступ к команде /pex
+    default: op
