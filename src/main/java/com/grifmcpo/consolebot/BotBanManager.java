@@ -116,6 +116,7 @@ public class BotBanManager {
         return true;
     }
 
+    // ===== МЕТОДЫ ДЛЯ УВЕДОМЛЕНИЙ =====
     public void notifyBannedUser(long userId, String reason, String duration, String issuer) {
         String msg = "[БОТ] У вас имеется активный бан в боте!\n" +
                 "Причина: " + reason + "\n" +
