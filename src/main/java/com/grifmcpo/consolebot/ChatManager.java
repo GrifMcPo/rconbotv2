@@ -28,7 +28,7 @@ public class ChatManager implements Listener {
     private void loadConfig() {
         plugin.reloadConfig();
         FileConfiguration config = plugin.getConfig();
-        chatFormat = config.getString("chat.format", "[G] «%clan%» %prefix% %player%: %message%");
+        chatFormat = config.getString("chat.format", "[G] {clan} {prefix} {player}: {message}");
         allowColors = config.getBoolean("chat.allow-colors", true);
         plugin.getLogger().info("✅ Формат чата: " + chatFormat);
     }
@@ -50,7 +50,10 @@ public class ChatManager implements Listener {
 
         // Форматирование сообщения
         String formattedMessage = formatMessage(player, message);
-        event.setFormat(formattedMessage);
+        
+        // ВАЖНО: setFormat использует String.format(), поэтому экранируем %
+        String safeFormat = formattedMessage.replace("%", "%%");
+        event.setFormat(safeFormat);
 
         plugin.getLogger().info("[CHAT] " + formattedMessage);
     }
@@ -61,10 +64,10 @@ public class ChatManager implements Listener {
         String playerName = player.getDisplayName();
 
         String formatted = chatFormat
-                .replace("%clan%", clanName)
-                .replace("%prefix%", prefix)
-                .replace("%player%", playerName)
-                .replace("%message%", message);
+                .replace("{clan}", clanName)
+                .replace("{prefix}", prefix)
+                .replace("{player}", playerName)
+                .replace("{message}", message);
 
         if (allowColors) {
             formatted = colorParser.parseColors(formatted);
@@ -77,9 +80,7 @@ public class ChatManager implements Listener {
 
     private String getClanName(Player player) {
         try {
-            // Проверяем, есть ли PlaceholderAPI
             if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
-                // Используем рефлексию для вызова PlaceholderAPI
                 Object papi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
                 if (papi != null) {
                     try {
@@ -102,7 +103,6 @@ public class ChatManager implements Listener {
 
     private String getPrefix(Player player) {
         try {
-            // Проверяем, есть ли PlaceholderAPI
             if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
                 Object papi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
                 if (papi != null) {
