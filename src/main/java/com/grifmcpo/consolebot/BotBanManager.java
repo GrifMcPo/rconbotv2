@@ -25,7 +25,7 @@ public class BotBanManager {
             try {
                 banFile.createNewFile();
             } catch (Exception e) {
-                plugin.getLogger().severe("❌ Не удалось создать botbans.yml");
+                plugin.getLogger().severe("Не удалось создать botbans.yml");
             }
         }
         banConfig = YamlConfiguration.loadConfiguration(banFile);
@@ -47,7 +47,7 @@ public class BotBanManager {
         }
 
         removeExpiredBans();
-        plugin.getLogger().info("✅ Загружено банов в боте: " + bans.size());
+        plugin.getLogger().info("Загружено банов в боте: " + bans.size());
     }
 
     public void saveBans() {
@@ -63,7 +63,7 @@ public class BotBanManager {
         try {
             banConfig.save(banFile);
         } catch (Exception e) {
-            plugin.getLogger().severe("❌ Ошибка сохранения botbans.yml: " + e.getMessage());
+            plugin.getLogger().severe("Ошибка сохранения botbans.yml: " + e.getMessage());
         }
     }
 
@@ -83,7 +83,6 @@ public class BotBanManager {
         }
     }
 
-    // ===== БАН =====
     public boolean banUser(long userId, String reason, String duration, String issuer) {
         if (userId == plugin.getOwnerId()) {
             return false;
@@ -104,15 +103,9 @@ public class BotBanManager {
         bans.put(userId, ban);
         saveBans();
 
-        plugin.sendMessageAsBot(userId, "⛔ Вас забанили в боте!\n" +
-                "📝 Причина: " + reason + "\n" +
-                "⏱ Срок: " + duration + "\n" +
-                "👤 Выдал: " + issuer);
-
         return true;
     }
 
-    // ===== РАЗБАН =====
     public boolean unbanUser(long userId, String reason, String issuer) {
         if (!isBanned(userId)) {
             return false;
@@ -120,15 +113,23 @@ public class BotBanManager {
 
         bans.remove(userId);
         saveBans();
-
-        plugin.sendMessageAsBot(userId, "✅ Ваш бан в боте снят!\n" +
-                "📝 Причина снятия: " + reason + "\n" +
-                "👤 Снял: " + issuer);
-
         return true;
     }
 
-    // ===== ПРОВЕРКА =====
+    public void notifyBannedUser(long userId, String reason, String duration, String issuer) {
+        String msg = "[БОТ] У вас имеется активный бан в боте!\n" +
+                "Причина: " + reason + "\n" +
+                "Дата выдачи: " + new java.text.SimpleDateFormat("dd.MM.yyyy HH:mm:ss").format(new Date()) + "\n" +
+                "Дата снятия: " + (duration.equals("навсегда") ? "навсегда" : "через " + duration);
+        plugin.sendMessageAsBot(userId, msg);
+    }
+
+    public void notifyUnbannedUser(long userId, String reason, String issuer) {
+        String msg = "[БОТ] Вас разбанили в боте!\n" +
+                "Причина: " + reason;
+        plugin.sendMessageAsBot(userId, msg);
+    }
+
     public boolean isBanned(long userId) {
         removeExpiredBans();
         return bans.containsKey(userId);
@@ -148,10 +149,10 @@ public class BotBanManager {
         if (ban == null) return null;
 
         String timeLeft = ban.duration.equals("навсегда") ? "навсегда" : getTimeLeft(ban.expires);
-        return "⛔ Вы забанены в боте!\n" +
-                "📝 Причина: " + ban.reason + "\n" +
-                "⏱ Осталось: " + timeLeft + "\n" +
-                "👤 Выдал: " + ban.issuer;
+        return "[БОТ] У вас имеется активный бан в боте!\n" +
+                "Причина: " + ban.reason + "\n" +
+                "Осталось: " + timeLeft + "\n" +
+                "Выдал: " + ban.issuer;
     }
 
     public List<BanData> getAllBans() {
@@ -159,7 +160,6 @@ public class BotBanManager {
         return new ArrayList<>(bans.values());
     }
 
-    // ===== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ =====
     private long parseTimeToMillis(String time) {
         if (time == null || time.equals("навсегда")) return Long.MAX_VALUE;
         char unit = time.charAt(time.length() - 1);
@@ -190,7 +190,6 @@ public class BotBanManager {
         return minutes + "м";
     }
 
-    // ===== КЛАСС ДАННЫХ БАНА =====
     public static class BanData {
         public final long userId;
         public final String reason;
@@ -222,23 +221,9 @@ public class BotBanManager {
         }
 
         public String getStatus() {
-            if (isExpired()) return "❌ Истек";
-            if (duration.equals("навсегда")) return "♾️ Навсегда";
-            return "⏳ Активен";
-        }
-
-        // ИСПРАВЛЕНО: используем переданный объект BotBanManager для вызова getTimeLeft
-        public String getTimeLeft(BotBanManager manager) {
-            return manager.getTimeLeft(expires);
-        }
-
-        @Override
-        public String toString() {
-            return "🆔 " + userId + "\n" +
-                    "📝 Причина: " + reason + "\n" +
-                    "⏱ " + duration + " (" + getStatus() + ")\n" +
-                    "👤 Выдал: " + issuer + "\n" +
-                    "📅 Выдан: " + getTimeAgo();
+            if (isExpired()) return "Истек";
+            if (duration.equals("навсегда")) return "Навсегда";
+            return "Активен";
         }
     }
 }
