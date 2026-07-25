@@ -2,21 +2,21 @@ package com.grifmcpo.consolebot;
 
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class GroupManager {
 
-    private final TelegramConsoleBot plugin;
+    private final JavaPlugin plugin;
     private File groupsFile;
     private FileConfiguration groupsConfig;
-    private final Map<String, List<Long>> groups = new ConcurrentHashMap<>();
-    private final Map<String, List<String>> groupPermissions = new ConcurrentHashMap<>();
-    private final Map<Long, String> userGroup = new ConcurrentHashMap<>();
+    private final Map<String, List<String>> groupUsers = new HashMap<>();
+    private final Map<String, List<String>> groupPermissions = new HashMap<>();
+    private final Map<String, List<String>> userGroups = new HashMap<>();
 
-    public GroupManager(TelegramConsoleBot plugin) {
+    public GroupManager(JavaPlugin plugin) {
         this.plugin = plugin;
         loadGroups();
     }
@@ -24,135 +24,127 @@ public class GroupManager {
     private void loadGroups() {
         groupsFile = new File(plugin.getDataFolder(), "groups.yml");
         if (!groupsFile.exists()) {
-            try {
-                groupsFile.createNewFile();
-            } catch (Exception e) {
-                plugin.getLogger().severe("❌ Не удалось создать groups.yml");
-            }
+            plugin.getLogger().info("📁 groups.yml не найден, создаю стандартный...");
+            createDefaultGroups();
         }
         groupsConfig = YamlConfiguration.loadConfiguration(groupsFile);
-        loadGroupsFromConfig();
+        parseGroups();
+        plugin.getLogger().info("✅ Загружено групп: " + groupUsers.size());
     }
 
-    private void loadGroupsFromConfig() {
-        groups.clear();
-        userGroup.clear();
-        groupPermissions.clear();
+    private void createDefaultGroups() {
+        groupsConfig = new YamlConfiguration();
 
-        for (String groupName : groupsConfig.getKeys(false)) {
-            // Загружаем пользователей
-            List<Long> users = groupsConfig.getLongList(groupName + ".users");
-            if (users.isEmpty()) {
-                // Если используется старый формат без .users
-                users = groupsConfig.getLongList(groupName);
-            }
-            
-            if (!users.isEmpty()) {
-                groups.put(groupName, users);
-                for (long id : users) {
-                    userGroup.put(id, groupName);
-                }
-            }
+        // Группа staff
+        List<String> staffUsers = Arrays.asList("8308522569", "987654321");
+        List<String> staffPerms = Arrays.asList(
+            "!rcon global ban",
+            "!rcon global kick",
+            "!rcon global unban",
+            "!rcon global banlist",
+            "!rcon global shist",
+            "!rcon global checkban",
+            "!rcon global warn",
+            "!rcon global unwarn",
+            "!rcon global whois",
+            "!rcon global seen"
+        );
+        groupsConfig.set("staff.users", staffUsers);
+        groupsConfig.set("staff.permissions", staffPerms);
 
-            // Загружаем права
-            List<String> perms = groupsConfig.getStringList(groupName + ".permissions");
-            if (perms != null && !perms.isEmpty()) {
-                groupPermissions.put(groupName, perms);
-                plugin.getLogger().info("✅ Загружены права для группы " + groupName + ": " + perms.size() + " прав");
-            } else {
-                // Если прав нет, но группа есть — даём пустой список
-                groupPermissions.put(groupName, new ArrayList<>());
-            }
-        }
+        // Группа leader
+        groupsConfig.set("leader.users", Arrays.asList("555555555"));
+        groupsConfig.set("leader.permissions", Arrays.asList("ALL"));
 
-        plugin.getLogger().info("✅ Загружено групп: " + groups.size());
-    }
+        // Группа admin
+        groupsConfig.set("admin.users", Arrays.asList("8889631346"));
+        groupsConfig.set("admin.permissions", Arrays.asList("ALL"));
 
-    public void saveGroups() {
-        for (Map.Entry<String, List<Long>> entry : groups.entrySet()) {
-            groupsConfig.set(entry.getKey() + ".users", entry.getValue());
-        }
-        for (Map.Entry<String, List<String>> entry : groupPermissions.entrySet()) {
-            if (!entry.getValue().isEmpty()) {
-                groupsConfig.set(entry.getKey() + ".permissions", entry.getValue());
-            }
-        }
+        // Группа owner
+        groupsConfig.set("owner.users", Arrays.asList("8889631346"));
+        groupsConfig.set("owner.permissions", Arrays.asList("ALL"));
+
         try {
             groupsConfig.save(groupsFile);
+            plugin.getLogger().info("✅ Создан стандартный groups.yml!");
         } catch (Exception e) {
             plugin.getLogger().severe("❌ Ошибка сохранения groups.yml: " + e.getMessage());
         }
     }
 
-    public String getUserGroup(long telegramId) {
-        return userGroup.get(telegramId);
-    }
+    @SuppressWarnings("unchecked")
+    private void parseGroups() {
+        groupUsers.clear();
+        groupPermissions.clear();
+        userGroups.clear();
 
-    public boolean hasPermission(long telegramId, String command) {
-        String group = userGroup.get(telegramId);
-        if (group == null) {
-            plugin.getLogger().info("❌ Пользователь " + telegramId + " не найден в группах");
-            return false;
-        }
+        for (String groupName : groupsConfig.getKeys(false)) {
+            List<String> users = (List<String>) groupsConfig.getList(groupName + ".users", new ArrayList<>());
+            List<String> permissions = (List<String>) groupsConfig.getList(groupName + ".permissions", new ArrayList<>());
 
-        List<String> perms = groupPermissions.get(group);
-        if (perms == null) {
-            plugin.getLogger().info("❌ Группа " + group + " не имеет прав");
-            return false;
-        }
+            groupUsers.put(groupName, users);
+            groupPermissions.put(groupName, permissions);
 
-        // ALL = все команды доступны
-        if (perms.contains("ALL")) {
-            return true;
-        }
-
-        // Проверяем конкретную команду
-        for (String perm : perms) {
-            if (perm.equals(command) || command.startsWith(perm)) {
-                return true;
+            for (String userId : users) {
+                userGroups.computeIfAbsent(userId, k -> new ArrayList<>()).add(groupName);
             }
         }
-        
-        plugin.getLogger().info("❌ У пользователя " + telegramId + " нет права на команду " + command);
+    }
+
+    public String getUserGroup(long userId) {
+        String key = String.valueOf(userId);
+        List<String> groups = userGroups.get(key);
+        if (groups == null || groups.isEmpty()) return null;
+        // Возвращаем первую группу (можно добавить приоритеты)
+        return groups.get(0);
+    }
+
+    public List<String> getUserGroups(long userId) {
+        return userGroups.getOrDefault(String.valueOf(userId), new ArrayList<>());
+    }
+
+    public boolean hasPermission(long userId, String command) {
+        String key = String.valueOf(userId);
+        List<String> groups = userGroups.get(key);
+        if (groups == null || groups.isEmpty()) return false;
+
+        for (String groupName : groups) {
+            List<String> perms = groupPermissions.getOrDefault(groupName, new ArrayList<>());
+            if (perms.contains("ALL")) return true;
+            if (perms.contains(command)) return true;
+        }
         return false;
     }
 
-    public List<String> getAvailableCommands(long telegramId) {
-        String group = userGroup.get(telegramId);
-        if (group == null) return new ArrayList<>();
+    public boolean isAdmin(long userId) {
+        String key = String.valueOf(userId);
+        List<String> groups = userGroups.get(key);
+        if (groups == null) return false;
+        return groups.contains("admin") || groups.contains("owner") || groups.contains("leader");
+    }
 
-        List<String> perms = groupPermissions.get(group);
-        if (perms == null) return new ArrayList<>();
+    public boolean isOwner(long userId) {
+        String key = String.valueOf(userId);
+        List<String> groups = userGroups.get(key);
+        if (groups == null) return false;
+        return groups.contains("owner");
+    }
 
-        if (perms.contains("ALL")) {
-            return Arrays.asList(
-                "ban", "unban", "mute", "unmute", "kick",
-                "banlist", "mutelist", "shist", "hist", "logs",
-                "checkban", "checkmute", "warn", "unwarn",
-                "checkwarn", "whois", "seen", "iphist",
-                "dupeip", "alts", "checkalts", "staffhistory",
-                "banip", "bc", "messageall"
-            );
-        }
+    public List<String> getAvailableCommands(long userId) {
+        String key = String.valueOf(userId);
+        List<String> groups = userGroups.get(key);
+        if (groups == null || groups.isEmpty()) return new ArrayList<>();
 
-        List<String> commands = new ArrayList<>();
-        for (String perm : perms) {
-            String cmd = perm.replace("!rcon global ", "");
-            if (!cmd.isEmpty()) {
-                commands.add(cmd);
+        Set<String> commands = new HashSet<>();
+        for (String groupName : groups) {
+            List<String> perms = groupPermissions.getOrDefault(groupName, new ArrayList<>());
+            if (perms.contains("ALL")) {
+                commands.add("все команды");
+                return new ArrayList<>(commands);
             }
+            commands.addAll(perms);
         }
-        return commands;
-    }
-
-    public boolean isAdmin(long telegramId) {
-        String group = userGroup.get(telegramId);
-        return group != null && (group.equals("admin") || group.equals("owner") || group.equals("leader"));
-    }
-
-    public boolean isOwner(long telegramId) {
-        String group = userGroup.get(telegramId);
-        return group != null && group.equals("owner");
+        return new ArrayList<>(commands);
     }
 
     public void reload() {
