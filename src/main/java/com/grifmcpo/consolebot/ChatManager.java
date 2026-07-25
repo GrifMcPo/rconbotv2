@@ -77,8 +77,24 @@ public class ChatManager implements Listener {
 
     private String getClanName(Player player) {
         try {
+            // Проверяем, есть ли PlaceholderAPI
             if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
-                return me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, "%simpleclans_clan_name%");
+                // Используем рефлексию для вызова PlaceholderAPI
+                Object papi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
+                if (papi != null) {
+                    try {
+                        java.lang.reflect.Method method = papi.getClass().getMethod("setPlaceholders", Player.class, String.class);
+                        if (method != null) {
+                            Object result = method.invoke(null, player, "%simpleclans_clan_name%");
+                            if (result instanceof String) {
+                                String clan = (String) result;
+                                if (clan != null && !clan.isEmpty() && !clan.equals("%simpleclans_clan_name%")) {
+                                    return clan;
+                                }
+                            }
+                        }
+                    } catch (Exception e) {}
+                }
             }
         } catch (Exception e) {}
         return "—";
@@ -86,8 +102,23 @@ public class ChatManager implements Listener {
 
     private String getPrefix(Player player) {
         try {
+            // Проверяем, есть ли PlaceholderAPI
             if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
-                return me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, "%vault_prefix%");
+                Object papi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
+                if (papi != null) {
+                    try {
+                        java.lang.reflect.Method method = papi.getClass().getMethod("setPlaceholders", Player.class, String.class);
+                        if (method != null) {
+                            Object result = method.invoke(null, player, "%vault_prefix%");
+                            if (result instanceof String) {
+                                String prefix = (String) result;
+                                if (prefix != null && !prefix.isEmpty() && !prefix.equals("%vault_prefix%")) {
+                                    return prefix;
+                                }
+                            }
+                        }
+                    } catch (Exception e) {}
+                }
             }
         } catch (Exception e) {}
         return "";
