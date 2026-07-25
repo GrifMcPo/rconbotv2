@@ -28,12 +28,12 @@ public class TelegramConsoleBot extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        getLogger().info("✅ ConsoleBot включен!");
+        getLogger().info("ConsoleBot включен!");
 
         saveDefaultConfig();
         String token = getConfig().getString("telegram-token");
         if (token == null || token.isEmpty()) {
-            getLogger().severe("❌ Токен не найден в config.yml!");
+            getLogger().severe("Токен не найден в config.yml!");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -48,7 +48,9 @@ public class TelegramConsoleBot extends JavaPlugin {
         botBanManager = new BotBanManager(this);
         groupManager = new GroupManager(this);
 
-        // ===== РЕГИСТРАЦИЯ КОМАНДЫ /pex =====
+        // Регистрация чат-листенера для блокировки мута
+        Bukkit.getPluginManager().registerEvents(punishmentManager, this);
+
         PluginCommand pexCommand = getCommand("pex");
         if (pexCommand != null) {
             pexCommand.setExecutor(new PexCommand(this));
@@ -59,16 +61,16 @@ public class TelegramConsoleBot extends JavaPlugin {
             botHandler = new TelegramBotHandler(token, this, playerManager, commandLogger, logsCommand,
                     commandExecutor, punishmentManager, botBanManager, groupManager);
             botsApi.registerBot(botHandler);
-            getLogger().info("✅ Telegram-бот успешно зарегистрирован!");
+            getLogger().info("Telegram-бот успешно зарегистрирован!");
         } catch (TelegramApiException e) {
-            getLogger().severe("❌ Ошибка при регистрации бота: " + e.getMessage());
+            getLogger().severe("Ошибка при регистрации бота: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
     @Override
     public void onDisable() {
-        getLogger().info("❌ ConsoleBot выключен.");
+        getLogger().info("ConsoleBot выключен.");
         if (commandLogger != null) commandLogger.saveLogs();
         if (commandExecutor != null) commandExecutor.close();
     }
@@ -89,10 +91,10 @@ public class TelegramConsoleBot extends JavaPlugin {
                     admins.put(key, config.getString(key));
                 }
             } catch (Exception e) {
-                getLogger().warning("❌ Ошибка загрузки admins.yml: " + e.getMessage());
+                getLogger().warning("Ошибка загрузки admins.yml: " + e.getMessage());
             }
         }
-        getLogger().info("✅ Загружено администраторов: " + admins.size());
+        getLogger().info("Загружено администраторов: " + admins.size());
     }
 
     public void saveAdmins() {
@@ -104,7 +106,7 @@ public class TelegramConsoleBot extends JavaPlugin {
             }
             config.save(adminsFile);
         } catch (Exception e) {
-            getLogger().severe("❌ Ошибка сохранения admins.yml: " + e.getMessage());
+            getLogger().severe("Ошибка сохранения admins.yml: " + e.getMessage());
         }
     }
 
