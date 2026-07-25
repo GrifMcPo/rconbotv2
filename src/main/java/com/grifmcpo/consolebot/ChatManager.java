@@ -38,7 +38,6 @@ public class ChatManager implements Listener {
         Player player = event.getPlayer();
         String message = event.getMessage();
 
-        // ===== ПРОВЕРКА МУТА =====
         if (punishmentManager.isMuted(player.getName())) {
             String muteMsg = punishmentManager.getMuteMessage(player.getName());
             if (muteMsg != null) {
@@ -48,32 +47,26 @@ public class ChatManager implements Listener {
             return;
         }
 
-        // ===== ФОРМАТИРОВАНИЕ СООБЩЕНИЯ =====
         String formattedMessage = formatMessage(player, message);
         event.setFormat(formattedMessage);
 
-        // ===== ОТПРАВКА В КОНСОЛЬ =====
         plugin.getLogger().info("[CHAT] " + formattedMessage);
     }
 
     private String formatMessage(Player player, String message) {
-        // Получаем данные
         String clanName = getClanName(player);
         String prefix = getPrefix(player);
         String playerName = player.getDisplayName();
 
-        // Собираем формат
         String formatted = chatFormat
                 .replace("%clan%", clanName)
                 .replace("%prefix%", prefix)
                 .replace("%player%", playerName)
                 .replace("%message%", message);
 
-        // Парсим HEX и RGB, если разрешено
         if (allowColors) {
             formatted = colorParser.parseColors(formatted);
         } else {
-            // Если цвета отключены — заменяем & на § (чтобы не было видно кодов)
             formatted = formatted.replace('&', '§');
         }
 
@@ -100,17 +93,4 @@ public class ChatManager implements Listener {
         return "";
     }
 
-    public void reload() {
-        loadConfig();
-    }
-
-    public String getChatFormat() {
-        return chatFormat;
-    }
-
-    public void setChatFormat(String format) {
-        this.chatFormat = format;
-        plugin.getConfig().set("chat.format", format);
-        plugin.saveConfig();
-    }
-}
+    public void reload
