@@ -6,6 +6,8 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -29,6 +31,7 @@ public class PunishmentManager implements Listener {
     private final Map<String, String> banIssuers = new ConcurrentHashMap<>();
     private final Map<String, String> banReasons = new ConcurrentHashMap<>();
 
+    private final List<String> allowedCommands = Arrays.asList("msg", "tell", "r", "reply", "help", "pay", "balance", "bal");
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
 
     public PunishmentManager(JavaPlugin plugin, AdminLogger adminLogger) {
@@ -47,7 +50,7 @@ public class PunishmentManager implements Listener {
             try {
                 historyFile.createNewFile();
             } catch (Exception e) {
-                plugin.getLogger().severe("❌ Не удалось создать history.yml");
+                plugin.getLogger().severe("Не удалось создать history.yml");
             }
         }
         historyConfig = YamlConfiguration.loadConfiguration(historyFile);
@@ -71,7 +74,7 @@ public class PunishmentManager implements Listener {
             }
             history.put(playerName, list);
         }
-        plugin.getLogger().info("✅ Загружена история наказаний");
+        plugin.getLogger().info("Загружена история наказаний");
     }
 
     private void loadActivePunishments() {
@@ -128,7 +131,7 @@ public class PunishmentManager implements Listener {
                 }
             }
         }
-        plugin.getLogger().info("✅ Загружено активных банов: " + bans.size() + ", мутов: " + mutes.size());
+        plugin.getLogger().info("Загружено активных банов: " + bans.size() + ", мутов: " + mutes.size());
     }
 
     private void startExpiryChecker() {
@@ -150,8 +153,8 @@ public class PunishmentManager implements Listener {
                 bans.remove(playerName);
                 banIssuers.remove(playerName);
                 banReasons.remove(playerName);
-                plugin.getLogger().info("✅ Автоснятие бана: " + playerName);
-                Bukkit.broadcastMessage("§aИгрок " + playerName + " был автоматически разбанен (срок истек)");
+                plugin.getLogger().info("Автоснятие бана: " + playerName);
+                Bukkit.broadcastMessage("Игрок " + playerName + " был автоматически разбанен (срок истек)");
             }
         }
 
@@ -162,10 +165,10 @@ public class PunishmentManager implements Listener {
                 mutes.remove(playerName);
                 muteIssuers.remove(playerName);
                 muteReasons.remove(playerName);
-                plugin.getLogger().info("✅ Автоснятие мута: " + playerName);
+                plugin.getLogger().info("Автоснятие мута: " + playerName);
                 Player p = Bukkit.getPlayer(playerName);
                 if (p != null && p.isOnline()) {
-                    p.sendMessage("§aВаш мут был автоматически снят (срок истек)");
+                    p.sendMessage("Ваш мут был автоматически снят (срок истек)");
                 }
             }
         }
@@ -190,7 +193,7 @@ public class PunishmentManager implements Listener {
         try {
             historyConfig.save(historyFile);
         } catch (Exception e) {
-            plugin.getLogger().severe("❌ Ошибка сохранения history.yml: " + e.getMessage());
+            plugin.getLogger().severe("Ошибка сохранения history.yml: " + e.getMessage());
         }
     }
 
@@ -283,7 +286,7 @@ public class PunishmentManager implements Listener {
             banReasons.remove(finalPlayerName);
             saveHistory();
 
-            String msg = "§fИгрок §9" + finalIssuer + " §aразбанил §c" + finalPlayerName +
+            String msg = "§fИгрок §9" + finalIssuer + " §fразбанил §c" + finalPlayerName +
                     " §fпо причине: §7" + finalReason;
             Bukkit.broadcastMessage(msg);
 
@@ -383,13 +386,13 @@ public class PunishmentManager implements Listener {
             muteReasons.remove(finalPlayerName);
             saveHistory();
 
-            String msg = "§fИгрок §9" + finalIssuer + " §aразмутил §c" + finalPlayerName +
+            String msg = "§fИгрок §9" + finalIssuer + " §fразмутил §c" + finalPlayerName +
                     " §fпо причине: §7" + finalReason;
             Bukkit.broadcastMessage(msg);
 
             Player player = Bukkit.getPlayer(finalPlayerName);
             if (player != null && player.isOnline()) {
-                player.sendMessage("§aВаш мут был снят!");
+                player.sendMessage("Ваш мут был снят!");
             }
 
             if (adminLogger != null) {
@@ -416,7 +419,7 @@ public class PunishmentManager implements Listener {
         Bukkit.getScheduler().runTask(plugin, () -> {
             Player player = Bukkit.getPlayer(finalPlayerName);
             if (player == null) {
-                plugin.getLogger().warning("❌ Игрок " + finalPlayerName + " не найден для кика!");
+                plugin.getLogger().warning("Игрок " + finalPlayerName + " не найден для кика!");
                 return;
             }
 
@@ -461,6 +464,35 @@ public class PunishmentManager implements Listener {
             if (kickMessage != null) {
                 event.disallow(PlayerLoginEvent.Result.KICK_BANNED, kickMessage);
             }
+        }
+    }
+
+    @EventHandler
+    public void onPlayerChat(AsyncPlayerChatEvent event) {
+        Player player = event.getPlayer();
+        if (isMuted(player.getName())) {
+            String msg = getMuteMessage(player.getName());
+            if (msg != null) {
+                player.sendMessage(msg);
+            }
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
+        Player player = event.getPlayer();
+        String command = event.getMessage().substring(1).split(" ")[0];
+
+        if (isMuted(player.getName())) {
+            String cmdLower = command.toLowerCase();
+            for (String allowed : allowedCommands) {
+                if (cmdLower.startsWith(allowed)) {
+                    return;
+                }
+            }
+            event.setCancelled(true);
+            player.sendMessage("§cВы не можете использовать команды во время мута!");
         }
     }
 
