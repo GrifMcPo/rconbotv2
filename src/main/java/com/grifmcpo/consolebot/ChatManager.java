@@ -6,6 +6,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class ChatManager implements Listener {
@@ -75,8 +76,27 @@ public class ChatManager implements Listener {
 
     private String getClanName(Player player) {
         try {
+            // Проверяем через PlaceholderAPI без прямой зависимости
             if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
-                return me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, "%simpleclans_clan_name%");
+                // Используем рефлексию для вызова PlaceholderAPI
+                Object papi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
+                if (papi != null) {
+                    // Пробуем через отражение
+                    try {
+                        java.lang.reflect.Method method = papi.getClass().getMethod("setPlaceholders", Player.class, String.class);
+                        if (method != null) {
+                            Object result = method.invoke(null, player, "%simpleclans_clan_name%");
+                            if (result instanceof String) {
+                                String clan = (String) result;
+                                if (clan != null && !clan.isEmpty() && !clan.equals("%simpleclans_clan_name%")) {
+                                    return clan;
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Если рефлексия не сработала, пробуем другой способ
+                    }
+                }
             }
         } catch (Exception e) {}
         return "—";
@@ -84,10 +104,16 @@ public class ChatManager implements Listener {
 
     private String getPrefix(Player player) {
         try {
-            net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
-                    .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
-            if (permission != null) {
-                return permission.getPlayerPrefix(player);
+            // Пробуем через Vault
+            if (Bukkit.getPluginManager().getPlugin("Vault") != null) {
+                RegisteredServiceProvider<net.milkbowl.vault.permission.Permission> rsp = 
+                    Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class);
+                if (rsp != null) {
+                    net.milkbowl.vault.permission.Permission permission = rsp.getProvider();
+                    if (permission != null) {
+                        return permission.getPlayerPrefix(player);
+                    }
+                }
             }
         } catch (Exception e) {}
         return "";
