@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot;
+package com.grifmcpo.consolebot; 
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
