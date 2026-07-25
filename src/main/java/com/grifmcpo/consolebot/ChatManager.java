@@ -1,30 +1,36 @@
 package com.grifmcpo.consolebot;
 
 import org.bukkit.Bukkit;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 public class ChatManager implements Listener {
 
     private final JavaPlugin plugin;
     private final PunishmentManager punishmentManager;
     private final ColorParser colorParser;
-
-    // Формат чата: [G] «Клан» [Префикс] Ник: сообщение
-    private String chatFormat = "[G] «%clan%» %prefix% %player%: %message%";
+    private String chatFormat;
+    private boolean allowColors;
 
     public ChatManager(JavaPlugin plugin, PunishmentManager punishmentManager) {
         this.plugin = plugin;
         this.punishmentManager = punishmentManager;
         this.colorParser = new ColorParser();
+        loadConfig();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         plugin.getLogger().info("✅ ChatManager загружен!");
+    }
+
+    private void loadConfig() {
+        plugin.reloadConfig();
+        FileConfiguration config = plugin.getConfig();
+        chatFormat = config.getString("chat.format", "[G] «%clan%» %prefix% %player%: %message%");
+        allowColors = config.getBoolean("chat.allow-colors", true);
+        plugin.getLogger().info("✅ Формат чата: " + chatFormat);
     }
 
     @EventHandler
@@ -34,7 +40,10 @@ public class ChatManager implements Listener {
 
         // ===== ПРОВЕРКА МУТА =====
         if (punishmentManager.isMuted(player.getName())) {
-            player.sendMessage("§cВы не можете писать в чат! Вы замучены.");
+            String muteMsg = punishmentManager.getMuteMessage(player.getName());
+            if (muteMsg != null) {
+                player.sendMessage(muteMsg);
+            }
             event.setCancelled(true);
             return;
         }
@@ -58,14 +67,20 @@ public class ChatManager implements Listener {
                 .replace("%clan%", clanName)
                 .replace("%prefix%", prefix)
                 .replace("%player%", playerName)
-                .replace("%message%", colorParser.parseColors(message));
+                .replace("%message%", message);
 
-        // Парсим HEX и RGB
-        return colorParser.parseColors(formatted);
+        // Парсим HEX и RGB, если разрешено
+        if (allowColors) {
+            formatted = colorParser.parseColors(formatted);
+        } else {
+            // Если цвета отключены — заменяем & на § (чтобы не было видно кодов)
+            formatted = formatted.replace('&', '§');
+        }
+
+        return formatted;
     }
 
     private String getClanName(Player player) {
-        // Пытаемся получить через PlaceholderAPI
         try {
             if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
                 return me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, "%simpleclans_clan_name%");
@@ -75,7 +90,6 @@ public class ChatManager implements Listener {
     }
 
     private String getPrefix(Player player) {
-        // Пытаемся получить через Vault
         try {
             net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
                     .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
@@ -86,11 +100,17 @@ public class ChatManager implements Listener {
         return "";
     }
 
-    public void setChatFormat(String format) {
-        this.chatFormat = format;
+    public void reload() {
+        loadConfig();
     }
 
     public String getChatFormat() {
         return chatFormat;
+    }
+
+    public void setChatFormat(String format) {
+        this.chatFormat = format;
+        plugin.getConfig().set("chat.format", format);
+        plugin.saveConfig();
     }
 }
