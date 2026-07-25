@@ -1,5 +1,5 @@
-package com.grifmcpo.consolebot; 
- 
+package com.grifmcpo.consolebot;
+
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -43,7 +43,6 @@ public class PunishmentManager implements Listener {
         loadHistory();
         loadActivePunishments();
         startExpiryChecker();
-        // ===== РЕГИСТРИРУЕМ ЛИСТЕНЕР =====
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -92,22 +91,51 @@ public class PunishmentManager implements Listener {
         for (Map.Entry<String, List<HistoryEntry>> entry : history.entrySet()) {
             String playerName = entry.getKey();
             List<HistoryEntry> list = entry.getValue();
-            for (HistoryEntry he : list) {
+
+            // Идём с конца, чтобы взять последнее наказание
+            for (int i = list.size() - 1; i >= 0; i--) {
+                HistoryEntry he = list.get(i);
+
+                // Проверяем бан
                 if (he.type.equals("ban")) {
-                    long expiry = he.duration.equals("навсегда") ? -1 : he.timestamp + parseTimeToMillis(he.duration);
-                    if (expiry == -1 || expiry > System.currentTimeMillis()) {
-                        bans.put(playerName, expiry);
-                        banIssuers.put(playerName, he.issuer);
-                        banReasons.put(playerName, he.reason);
+                    // Проверяем, не было ли разбана ПОСЛЕ этого бана
+                    boolean wasUnbanned = false;
+                    for (int j = i + 1; j < list.size(); j++) {
+                        if (list.get(j).type.equals("unban")) {
+                            wasUnbanned = true;
+                            break;
+                        }
                     }
+                    if (!wasUnbanned) {
+                        long expiry = he.duration.equals("навсегда") ? -1 : he.timestamp + parseTimeToMillis(he.duration);
+                        if (expiry == -1 || expiry > System.currentTimeMillis()) {
+                            bans.put(playerName, expiry);
+                            banIssuers.put(playerName, he.issuer);
+                            banReasons.put(playerName, he.reason);
+                        }
+                    }
+                    break; // берём только последний бан
                 }
+
+                // Проверяем мут
                 if (he.type.equals("mute")) {
-                    long expiry = he.duration.equals("навсегда") ? -1 : he.timestamp + parseTimeToMillis(he.duration);
-                    if (expiry == -1 || expiry > System.currentTimeMillis()) {
-                        mutes.put(playerName, expiry);
-                        muteIssuers.put(playerName, he.issuer);
-                        muteReasons.put(playerName, he.reason);
+                    // Проверяем, не было ли размута ПОСЛЕ этого мута
+                    boolean wasUnmuted = false;
+                    for (int j = i + 1; j < list.size(); j++) {
+                        if (list.get(j).type.equals("unmute")) {
+                            wasUnmuted = true;
+                            break;
+                        }
                     }
+                    if (!wasUnmuted) {
+                        long expiry = he.duration.equals("навсегда") ? -1 : he.timestamp + parseTimeToMillis(he.duration);
+                        if (expiry == -1 || expiry > System.currentTimeMillis()) {
+                            mutes.put(playerName, expiry);
+                            muteIssuers.put(playerName, he.issuer);
+                            muteReasons.put(playerName, he.reason);
+                        }
+                    }
+                    break; // берём только последний мут
                 }
             }
         }
@@ -212,7 +240,6 @@ public class PunishmentManager implements Listener {
             banReasons.put(finalPlayerName, finalReason);
             saveHistory();
 
-            // Кикаем игрока с красивым сообщением
             Player player = Bukkit.getPlayer(finalPlayerName);
             if (player != null && player.isOnline()) {
                 String expiryStr = expiry == -1 ? "навсегда" : formatTimeLeft(expiry);
@@ -252,6 +279,16 @@ public class PunishmentManager implements Listener {
         final String finalReason = reason;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
+            HistoryEntry entry = new HistoryEntry();
+            entry.type = "unban";
+            entry.player = finalPlayerName;
+            entry.issuer = finalIssuer;
+            entry.reason = finalReason;
+            entry.duration = "навсегда";
+            entry.timestamp = System.currentTimeMillis();
+            entry.hidden = false;
+            addHistorySync(finalPlayerName, entry);
+
             bans.remove(finalPlayerName);
             banIssuers.remove(finalPlayerName);
             banReasons.remove(finalPlayerName);
@@ -304,7 +341,6 @@ public class PunishmentManager implements Listener {
             muteReasons.put(finalPlayerName, finalReason);
             saveHistory();
 
-            // Отправляем уведомление игроку
             Player player = Bukkit.getPlayer(finalPlayerName);
             if (player != null && player.isOnline()) {
                 String expiryStr = expiry == -1 ? "навсегда" : formatTimeLeft(expiry);
@@ -343,6 +379,16 @@ public class PunishmentManager implements Listener {
         final String finalReason = reason;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
+            HistoryEntry entry = new HistoryEntry();
+            entry.type = "unmute";
+            entry.player = finalPlayerName;
+            entry.issuer = finalIssuer;
+            entry.reason = finalReason;
+            entry.duration = "навсегда";
+            entry.timestamp = System.currentTimeMillis();
+            entry.hidden = false;
+            addHistorySync(finalPlayerName, entry);
+
             mutes.remove(finalPlayerName);
             muteIssuers.remove(finalPlayerName);
             muteReasons.remove(finalPlayerName);
@@ -413,10 +459,9 @@ public class PunishmentManager implements Listener {
     }
 
     // ============================================
-    // ==== СОБЫТИЯ (БЛОКИРОВКА) =====
+    // ==== СОБЫТИЯ =====
     // ============================================
 
-    // ===== БЛОКИРОВКА ВХОДА ПРИ БАНЕ =====
     @EventHandler
     public void onPlayerLogin(PlayerLoginEvent event) {
         Player player = event.getPlayer();
@@ -430,7 +475,6 @@ public class PunishmentManager implements Listener {
         }
     }
 
-    // ===== БЛОКИРОВКА ЧАТА ПРИ МУТЕ =====
     @EventHandler
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         Player player = event.getPlayer();
@@ -444,7 +488,6 @@ public class PunishmentManager implements Listener {
         }
     }
 
-    // ===== БЛОКИРОВКА КОМАНД ПРИ МУТЕ =====
     @EventHandler
     public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
         Player player = event.getPlayer();
@@ -454,7 +497,7 @@ public class PunishmentManager implements Listener {
             String cmdLower = command.toLowerCase();
             for (String allowed : allowedCommands) {
                 if (cmdLower.startsWith(allowed)) {
-                    return; // Разрешено
+                    return;
                 }
             }
 
@@ -466,6 +509,7 @@ public class PunishmentManager implements Listener {
     // ============================================
     // ==== GETTERS =====
     // ============================================
+
     public HistoryEntry getLastBan(String playerName) {
         List<HistoryEntry> list = history.get(playerName);
         if (list == null || list.isEmpty()) return null;
@@ -638,6 +682,7 @@ public class PunishmentManager implements Listener {
     // ============================================
     // ==== ВСПОМОГАТЕЛЬНЫЕ =====
     // ============================================
+
     private void addHistorySync(String playerName, HistoryEntry entry) {
         List<HistoryEntry> list = history.computeIfAbsent(playerName, k -> new ArrayList<>());
         list.add(entry);
@@ -712,6 +757,7 @@ public class PunishmentManager implements Listener {
     // ============================================
     // ==== КЛАСС ИСТОРИИ =====
     // ============================================
+
     public static class HistoryEntry {
         public String type;
         public String player;
