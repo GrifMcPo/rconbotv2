@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot;
+package com.grifmcpo.consolebot; 
 
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
