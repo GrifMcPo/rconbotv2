@@ -280,7 +280,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 return;
             }
 
-            // ===== БАН, КИК, РАЗБАН (МУТЫ УБРАНЫ) =====
+            // ===== БАН, КИК, РАЗБАН =====
             if (cmd.startsWith("ban ") || cmd.startsWith("kick ") || cmd.startsWith("unban ")) {
                 handlePunishment(chatId, cmd, userId);
                 return;
@@ -567,8 +567,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             }
             String timeAgo = punishmentManager.getTimeAgo(entry.timestamp);
             String status = entry.type.equals("ban") ?
-                (punishmentManager.isBanned(target) ? "[Активен]" : "[Истек]") :
-                (punishmentManager.isMuted(target) ? "[Активен]" : "[Истек]");
+                (punishmentManager.isBanned(target) ? "[Активен]" : "[Истек]") : "[Истек]";
             String actionName = entry.getActionName();
 
             response.append("\n\n - ").append(timeAgo).append(" -");
@@ -690,7 +689,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         if (group != null && (group.equals("admin") || group.equals("owner") || group.equals("leader"))) {
             response.append(" - core (нет доступа)\n");
-            response.append(" - bw (history, dupeip, shist, unban, checkban, banlist, hist, staffhist, staffhistory, ban, alts, kick, checkalts, iphist)\n");
+            response.append(" - bw (history, shist, unban, checkban, banlist, hist, staffhist, staffhistory, ban, alts, kick, checkalts, iphist)\n");
             response.append(" - grief (нет доступа)");
         }
 
@@ -726,8 +725,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 for (PunishmentManager.HistoryEntry entry : history) {
                     String timeAgo = punishmentManager.getTimeAgo(entry.timestamp);
                     String status = entry.type.equals("ban") ?
-                        (punishmentManager.isBanned(playerName) ? "[Активен]" : "[Истек]") :
-                        (punishmentManager.isMuted(playerName) ? "[Активен]" : "[Истек]");
+                        (punishmentManager.isBanned(playerName) ? "[Активен]" : "[Истек]") : "[Истек]";
                     items.add("- " + timeAgo + " -\n   " + playerName + " был " + entry.getActionName() +
                             " на " + entry.duration + " " + entry.issuer + ": " + entry.reason + " " + status);
                 }
