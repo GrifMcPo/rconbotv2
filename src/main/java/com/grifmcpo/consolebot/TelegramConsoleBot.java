@@ -25,7 +25,6 @@ public class TelegramConsoleBot extends JavaPlugin {
     private BotBanManager botBanManager;
     private GroupManager groupManager;
     private TelegramBotHandler botHandler;
-    private ChatManager chatManager;  // Чат-менеджер
 
     @Override
     public void onEnable() {
@@ -54,12 +53,6 @@ public class TelegramConsoleBot extends JavaPlugin {
         if (pexCommand != null) {
             pexCommand.setExecutor(new PexCommand(this));
         }
-
-        // ===== РЕГИСТРАЦИЯ ЧАТ-МОДУЛЯ =====
-        chatManager = new ChatManager(this, punishmentManager);
-        Bukkit.getPluginManager().registerEvents(chatManager, this);
-        Bukkit.getPluginManager().registerEvents(new ChatListener(punishmentManager), this);
-        getLogger().info("✅ Собственный чат-модуль загружен!");
 
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
@@ -135,5 +128,4 @@ public class TelegramConsoleBot extends JavaPlugin {
     public BotBanManager getBotBanManager() { return botBanManager; }
     public GroupManager getGroupManager() { return groupManager; }
     public TelegramBotHandler getBotHandler() { return botHandler; }
-    public ChatManager getChatManager() { return chatManager; }
 }
