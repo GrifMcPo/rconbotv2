@@ -5,9 +5,14 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 
+import java.util.List;
+
 public class ChatListener implements Listener {
 
     private final PunishmentManager punishmentManager;
+    private final List<String> allowedCommands = List.of(
+        "msg", "tell", "r", "reply", "help", "pay", "balance", "bal"
+    );
 
     public ChatListener(PunishmentManager punishmentManager) {
         this.punishmentManager = punishmentManager;
@@ -18,13 +23,10 @@ public class ChatListener implements Listener {
         Player player = event.getPlayer();
         String command = event.getMessage().toLowerCase();
 
-        // Разрешённые команды во время мута
-        String[] allowed = {"/msg", "/tell", "/r", "/reply", "/help", "/pay", "/balance"};
-
         if (punishmentManager.isMuted(player.getName())) {
-            for (String cmd : allowed) {
-                if (command.startsWith(cmd)) {
-                    return; // Разрешено
+            for (String allowed : allowedCommands) {
+                if (command.startsWith("/" + allowed) || command.startsWith("/minecraft:" + allowed)) {
+                    return;
                 }
             }
             event.setCancelled(true);
