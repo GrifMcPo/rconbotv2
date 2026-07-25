@@ -46,9 +46,8 @@ public class TelegramConsoleBot extends JavaPlugin {
         adminLogger = new AdminLogger(this);
         punishmentManager = new PunishmentManager(this, adminLogger);
         botBanManager = new BotBanManager(this);
-        groupManager = new GroupManager(this);
+        groupManager = new GroupManager(this); // groups.yml создастся автоматически
 
-        // ===== РЕГИСТРАЦИЯ КОМАНДЫ /pex =====
         PluginCommand pexCommand = getCommand("pex");
         if (pexCommand != null) {
             pexCommand.setExecutor(new PexCommand(this));
