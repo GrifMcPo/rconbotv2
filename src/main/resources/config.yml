@@ -6,29 +6,3 @@ rcon:
   host: "127.0.0.1"
   port: 25575
   password: "_87_14_10grifmcproRcon"
-
-# ============================================
-# Настройки чата (собственный чат-модуль)
-# ============================================
-chat:
-  # Формат: [канал] «клан» [префикс] ник: сообщение
-  # Доступные плейсхолдеры:
-  #   %clan%    — название клана (из SimpleClans)
-  #   %prefix%  — префикс из LuckPerms
-  #   %player%  — ник игрока
-  #   %message% — сообщение
-  format: "[G] «%clan%» %prefix% %player%: %message%"
-  
-  # Разрешить цвета (&, HEX, RGB)
-  allow-colors: true
-  
-  # Команды, разрешённые во время мута
-  allowed-commands:
-    - msg
-    - tell
-    - r
-    - reply
-    - help
-    - pay
-    - balance
-    - bal
