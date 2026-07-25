@@ -6,7 +6,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class ChatManager implements Listener {
@@ -57,19 +56,16 @@ public class ChatManager implements Listener {
     }
 
     private String formatMessage(Player player, String message) {
-        // Получаем данные
         String clanName = getClanName(player);
         String prefix = getPrefix(player);
         String playerName = player.getDisplayName();
 
-        // Собираем формат
         String formatted = chatFormat
                 .replace("%clan%", clanName)
                 .replace("%prefix%", prefix)
                 .replace("%player%", playerName)
                 .replace("%message%", message);
 
-        // Парсим цвета
         if (allowColors) {
             formatted = colorParser.parseColors(formatted);
         } else {
@@ -80,40 +76,20 @@ public class ChatManager implements Listener {
     }
 
     private String getClanName(Player player) {
-        // Пробуем получить клан через SimpleClans напрямую (если плагин есть)
         try {
-            if (Bukkit.getPluginManager().getPlugin("simpleclans-PLUS") != null) {
-                return "Клан"; // Заглушка, пока нет API
+            if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+                return me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, "%simpleclans_clan_name%");
             }
         } catch (Exception e) {}
         return "—";
     }
 
     private String getPrefix(Player player) {
-        // Пробуем через Vault
         try {
-            RegisteredServiceProvider<net.milkbowl.vault.permission.Permission> rsp =
-                    Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class);
-            if (rsp != null) {
-                net.milkbowl.vault.permission.Permission permission = rsp.getProvider();
-                if (permission != null) {
-                    // В Vault 1.7+ метод getPlayerPrefix принимает Player
-                    return permission.getPlayerPrefix(player);
-                }
+            if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+                return me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, "%vault_prefix%");
             }
-        } catch (Throwable e) {
-            // Если не сработало, пробуем через мир и имя
-            try {
-                RegisteredServiceProvider<net.milkbowl.vault.permission.Permission> rsp2 =
-                        Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class);
-                if (rsp2 != null) {
-                    net.milkbowl.vault.permission.Permission permission = rsp2.getProvider();
-                    if (permission != null) {
-                        return permission.getPlayerPrefix(player.getWorld().getName(), player.getName());
-                    }
-                }
-            } catch (Throwable e2) {}
-        }
+        } catch (Exception e) {}
         return "";
     }
 
