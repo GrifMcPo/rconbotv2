@@ -39,6 +39,7 @@ public class ChatManager implements Listener {
         Player player = event.getPlayer();
         String message = event.getMessage();
 
+        // Проверка мута
         if (punishmentManager.isMuted(player.getName())) {
             String muteMsg = punishmentManager.getMuteMessage(player.getName());
             if (muteMsg != null) {
@@ -48,6 +49,7 @@ public class ChatManager implements Listener {
             return;
         }
 
+        // Форматирование сообщения
         String formattedMessage = formatMessage(player, message);
         event.setFormat(formattedMessage);
 
@@ -55,16 +57,19 @@ public class ChatManager implements Listener {
     }
 
     private String formatMessage(Player player, String message) {
+        // Получаем данные
         String clanName = getClanName(player);
         String prefix = getPrefix(player);
         String playerName = player.getDisplayName();
 
+        // Собираем формат
         String formatted = chatFormat
                 .replace("%clan%", clanName)
                 .replace("%prefix%", prefix)
                 .replace("%player%", playerName)
                 .replace("%message%", message);
 
+        // Парсим цвета
         if (allowColors) {
             formatted = colorParser.parseColors(formatted);
         } else {
@@ -75,47 +80,40 @@ public class ChatManager implements Listener {
     }
 
     private String getClanName(Player player) {
+        // Пробуем получить клан через SimpleClans напрямую (если плагин есть)
         try {
-            // Проверяем через PlaceholderAPI без прямой зависимости
-            if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
-                // Используем рефлексию для вызова PlaceholderAPI
-                Object papi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
-                if (papi != null) {
-                    // Пробуем через отражение
-                    try {
-                        java.lang.reflect.Method method = papi.getClass().getMethod("setPlaceholders", Player.class, String.class);
-                        if (method != null) {
-                            Object result = method.invoke(null, player, "%simpleclans_clan_name%");
-                            if (result instanceof String) {
-                                String clan = (String) result;
-                                if (clan != null && !clan.isEmpty() && !clan.equals("%simpleclans_clan_name%")) {
-                                    return clan;
-                                }
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Если рефлексия не сработала, пробуем другой способ
-                    }
-                }
+            if (Bukkit.getPluginManager().getPlugin("simpleclans-PLUS") != null) {
+                return "Клан"; // Заглушка, пока нет API
             }
         } catch (Exception e) {}
         return "—";
     }
 
     private String getPrefix(Player player) {
+        // Пробуем через Vault
         try {
-            // Пробуем через Vault
-            if (Bukkit.getPluginManager().getPlugin("Vault") != null) {
-                RegisteredServiceProvider<net.milkbowl.vault.permission.Permission> rsp = 
+            RegisteredServiceProvider<net.milkbowl.vault.permission.Permission> rsp =
                     Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class);
-                if (rsp != null) {
-                    net.milkbowl.vault.permission.Permission permission = rsp.getProvider();
-                    if (permission != null) {
-                        return permission.getPlayerPrefix(player);
-                    }
+            if (rsp != null) {
+                net.milkbowl.vault.permission.Permission permission = rsp.getProvider();
+                if (permission != null) {
+                    // В Vault 1.7+ метод getPlayerPrefix принимает Player
+                    return permission.getPlayerPrefix(player);
                 }
             }
-        } catch (Exception e) {}
+        } catch (Throwable e) {
+            // Если не сработало, пробуем через мир и имя
+            try {
+                RegisteredServiceProvider<net.milkbowl.vault.permission.Permission> rsp2 =
+                        Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class);
+                if (rsp2 != null) {
+                    net.milkbowl.vault.permission.Permission permission = rsp2.getProvider();
+                    if (permission != null) {
+                        return permission.getPlayerPrefix(player.getWorld().getName(), player.getName());
+                    }
+                }
+            } catch (Throwable e2) {}
+        }
         return "";
     }
 
