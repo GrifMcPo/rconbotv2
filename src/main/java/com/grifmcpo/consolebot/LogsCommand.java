@@ -19,64 +19,57 @@ public class LogsCommand {
         if (args.length < 2) {
             SendMessage msg = new SendMessage();
             msg.setChatId(String.valueOf(chatId));
-            msg.setText("[БОТ] Используй: !rcon logs <ник> [дней]\nПример: !rcon logs pley1657 30");
+            msg.setText("[БОТ] Использование: !logs <ник> [кол-во]");
             return msg;
         }
 
         String playerName = args[1];
-        int days = 5;
+        int limit = 10;
 
         if (args.length >= 3) {
             try {
-                days = Integer.parseInt(args[2]);
-                if (days < 1) days = 1;
-                if (days > 90) days = 90;
-            } catch (NumberFormatException e) {
-                // игнорируем
-            }
+                limit = Integer.parseInt(args[2]);
+                if (limit < 1) limit = 1;
+                if (limit > 50) limit = 50;
+            } catch (NumberFormatException e) {}
         }
 
-        List<CommandLogger.LogEntry> logs = plugin.getCommandLogger().getLogs(playerName, days);
-
-        SendMessage msg = new SendMessage();
-        msg.setChatId(String.valueOf(chatId));
-
+        List<CommandLogger.LogEntry> logs = plugin.getCommandLogger().getLogs(playerName, 30);
         if (logs.isEmpty()) {
-            msg.setText("[БОТ] Ответ сервера:\n" + SEPARATOR + "\n📭 Нет логов для " + playerName + " за последние " + days + " дн.\n" + SEPARATOR);
+            SendMessage msg = new SendMessage();
+            msg.setChatId(String.valueOf(chatId));
+            msg.setText("[БОТ] Нет логов для " + playerName);
             return msg;
         }
+
+        List<CommandLogger.LogEntry> recent = logs.stream()
+            .limit(limit)
+            .toList();
 
         SimpleDateFormat sdf = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
         sdf.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
 
         StringBuilder response = new StringBuilder();
-        response.append("[БОТ] Ответ сервера:\n").append(SEPARATOR).append("\n");
-        response.append("📋 Логи команд для ").append(playerName).append("\n");
-        response.append("📅 За последние ").append(days).append(" дней\n");
+        response.append("[БОТ] Логи игрока ").append(playerName)
+                .append(" (последние ").append(recent.size()).append("):\n");
         response.append(SEPARATOR).append("\n");
 
-        int count = 0;
-        for (CommandLogger.LogEntry entry : logs) {
-            if (count >= 50) {
-                response.append("\n... и ещё ").append(logs.size() - 50).append(" записей");
-                break;
-            }
+        for (CommandLogger.LogEntry entry : recent) {
             String time = entry.timestamp;
             try {
                 SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                 inputFormat.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
                 java.util.Date date = inputFormat.parse(entry.timestamp);
                 time = sdf.format(date);
-            } catch (Exception e) {
-                // оставляем как есть
-            }
-            response.append("• ").append(time).append("  →  ").append(entry.command).append("\n");
-            count++;
+            } catch (Exception e) {}
+            response.append(time).append(" | ").append(entry.command).append("\n");
         }
 
         response.append(SEPARATOR).append("\n");
-        response.append("📊 Всего записей: ").append(logs.size());
+        response.append("Всего записей: ").append(logs.size());
 
+        SendMessage msg = new SendMessage();
+        msg.setChatId(String.valueOf(chatId));
         msg.setText(response.toString());
         return msg;
     }
