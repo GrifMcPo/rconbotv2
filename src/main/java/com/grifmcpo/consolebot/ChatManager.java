@@ -93,4 +93,17 @@ public class ChatManager implements Listener {
         return "";
     }
 
-    public void reload
+    public void reload() {
+        loadConfig();
+    }
+
+    public String getChatFormat() {
+        return chatFormat;
+    }
+
+    public void setChatFormat(String format) {
+        this.chatFormat = format;
+        plugin.getConfig().set("chat.format", format);
+        plugin.saveConfig();
+    }
+}
