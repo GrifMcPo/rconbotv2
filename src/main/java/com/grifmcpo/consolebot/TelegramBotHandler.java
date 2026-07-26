@@ -135,139 +135,98 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        if (messageText.startsWith("!ban ") || messageText.startsWith("!unban ") ||
-            messageText.startsWith("!list ") || messageText.startsWith("!logs ")) {
-            handleShortCommand(chatId, messageText, userId);
-            return;
-        }
-
         if (messageText.startsWith("!")) {
             sendMessage(chatId, "[БОТ] Неизвестная команда. Доступные команды: !id, !rcon ...");
         }
     }
 
-    private void handleShortCommand(long chatId, String message, long userId) {
-        String[] parts = message.split(" ");
-        String cmd = parts[0].toLowerCase();
-
-        switch (cmd) {
-            case "!ban":
-                if (parts.length < 4) {
-                    sendMessage(chatId, "[БОТ] Использование: !ban <id> <время> <причина>");
-                    return;
-                }
-                handleBotBan(chatId, parts, userId);
-                break;
-
-            case "!unban":
-                if (parts.length < 3) {
-                    sendMessage(chatId, "[БОТ] Использование: !unban <id> <причина>");
-                    return;
-                }
-                handleBotUnban(chatId, parts, userId);
-                break;
-
-            case "!list":
-                if (parts.length < 2) {
-                    sendMessage(chatId, "[БОТ] Использование: !list id | !list server");
-                    return;
-                }
-                handleList(chatId, parts[1], userId);
-                break;
-
-            case "!logs":
-                if (parts.length < 2) {
-                    sendMessage(chatId, "[БОТ] Использование: !logs <ник> [кол-во]");
-                    return;
-                }
-                handleLogs(chatId, parts, userId);
-                break;
-
-            default:
-                sendMessage(chatId, "[БОТ] Неизвестная команда.");
-        }
-    }
-
-    private void handleBotBan(long chatId, String[] parts, long userId) {
-        long targetId;
-        try {
-            targetId = Long.parseLong(parts[1]);
-        } catch (NumberFormatException e) {
-            sendMessage(chatId, "[БОТ] Неверный ID!");
+    private void handleRconCommand(long chatId, String command, long userId) {
+        String[] parts = command.split(" ");
+        if (parts.length == 0) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global <команда>");
             return;
         }
 
-        if (targetId == plugin.getOwnerId()) {
-            sendMessage(chatId, "[БОТ] Нельзя забанить владельца!");
+        String server = parts[0].toLowerCase();
+        if (!server.equals("global")) {
+            sendMessage(chatId, "[БОТ] Доступен только сервер global");
             return;
         }
 
-        if (plugin.isAdmin(targetId)) {
-            sendMessage(chatId, "[БОТ] Нельзя забанить администратора!");
+        String cmd = command.substring(7).trim();
+        if (cmd.isEmpty()) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global <команда>");
             return;
         }
 
-        String duration = parts[2];
-        String reason = String.join(" ", Arrays.copyOfRange(parts, 3, parts.length));
-        String issuer = plugin.getCustomSender(userId);
-        if (issuer == null) issuer = "RCON@" + userId;
+        String cmdName = cmd.split(" ")[0];
 
-        boolean success = botBanManager.banUser(targetId, reason, duration, issuer);
-        if (success) {
-            String msg = "[БОТ] Игрок " + targetId + " забанен в боте на " + duration + " по причине: " + reason;
-            sendMessage(chatId, msg);
-            botBanManager.notifyBannedUser(targetId, reason, duration, issuer);
-        } else {
-            sendMessage(chatId, "[БОТ] ID " + targetId + " уже забанен в боте!");
-        }
-    }
-
-    private void handleBotUnban(long chatId, String[] parts, long userId) {
-        long targetId;
-        try {
-            targetId = Long.parseLong(parts[1]);
-        } catch (NumberFormatException e) {
-            sendMessage(chatId, "[БОТ] Неверный ID!");
+        if (!groupManager.hasPermission(userId, "!rcon global " + cmdName) && 
+            !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+            sendMessage(chatId, "[БОТ] У вас нет доступа к данной команде!");
+            plugin.getLogger().info("Доступ запрещён: " + userId + " -> " + cmdName);
             return;
         }
 
-        String reason = String.join(" ", Arrays.copyOfRange(parts, 2, parts.length));
-        String issuer = plugin.getCustomSender(userId);
-        if (issuer == null) issuer = "RCON@" + userId;
-
-        boolean success = botBanManager.unbanUser(targetId, reason, issuer);
-        if (success) {
-            sendMessage(chatId, "[БОТ] Игрок " + targetId + " разбанен в боте по причине: " + reason);
-            botBanManager.notifyUnbannedUser(targetId, reason, issuer);
-        } else {
-            sendMessage(chatId, "[БОТ] ID " + targetId + " не забанен в боте!");
+        // ===== НОВЫЕ КОМАНДЫ =====
+        if (cmd.startsWith("logs ")) {
+            handleLogs(chatId, cmd, userId);
+            return;
         }
+
+        if (cmd.startsWith("shist ")) {
+            handleShist(chatId, cmd, userId);
+            return;
+        }
+
+        if (cmd.startsWith("hist ")) {
+            handleHist(chatId, cmd, userId);
+            return;
+        }
+
+        if (cmd.startsWith("dupeip ")) {
+            handleDupeip(chatId, cmd, userId);
+            return;
+        }
+
+        if (cmd.startsWith("pex user ")) {
+            handlePexUser(chatId, cmd, userId);
+            return;
+        }
+
+        // ===== СТАРЫЕ КОМАНДЫ =====
+        if (cmd.startsWith("bc ") || cmd.startsWith("bcast ")) {
+            handleBroadcast(chatId, cmd, userId);
+            return;
+        }
+
+        if (cmd.startsWith("ban ") || cmd.startsWith("mute ") || 
+            cmd.startsWith("kick ") || cmd.startsWith("unban ") || cmd.startsWith("unmute ")) {
+            handlePunishment(chatId, cmd, userId);
+            return;
+        }
+
+        if (cmd.startsWith("checkban ")) {
+            handleCheckBan(chatId, cmd);
+            return;
+        }
+
+        if (cmd.startsWith("banlist")) {
+            handleBanList(chatId, cmd);
+            return;
+        }
+
+        executeServerCommand(chatId, cmd, userId);
     }
 
-    private void handleList(long chatId, String type, long userId) {
-        if (type.equalsIgnoreCase("id")) {
-            if (knownUsers.isEmpty()) {
-                sendMessage(chatId, "[БОТ] Список ID пуст.");
-                return;
-            }
-            StringBuilder sb = new StringBuilder();
-            sb.append("[БОТ] Список ID (").append(knownUsers.size()).append("):\n");
-            int count = 0;
-            for (long id : knownUsers) {
-                sb.append(id);
-                if (++count < knownUsers.size()) sb.append("\n");
-            }
-            sendMessage(chatId, sb.toString());
-        } else if (type.equalsIgnoreCase("server")) {
-            int online = Bukkit.getOnlinePlayers().size();
-            int max = Bukkit.getMaxPlayers();
-            sendMessage(chatId, "[БОТ] Онлайн: " + online + "/" + max);
-        } else {
-            sendMessage(chatId, "[БОТ] Использование: !list id | !list server");
+    // ===== LOGS =====
+    private void handleLogs(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon logs <ник> [кол-во]");
+            return;
         }
-    }
-
-    private void handleLogs(long chatId, String[] parts, long userId) {
+        
         String playerName = parts[1];
         int limit = 10;
         if (parts.length >= 3) {
@@ -310,63 +269,289 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, response.toString());
     }
 
-    private void handleRconCommand(long chatId, String command, long userId) {
-        String[] parts = command.split(" ");
-        if (parts.length == 0) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global <команда>");
+    // ===== SHIST (наказания, которые ВЫДАЛ игрок) =====
+    private void handleShist(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon shist <ник> [кол-во]");
+            return;
+        }
+        
+        String issuerName = parts[1];
+        int limit = 10;
+        if (parts.length >= 3) {
+            try { limit = Integer.parseInt(parts[2]); } catch (NumberFormatException e) {}
+            if (limit < 1) limit = 1;
+            if (limit > 50) limit = 50;
+        }
+
+        // Собираем все наказания, где issuer = issuerName
+        List<PunishmentManager.HistoryEntry> allHistory = new ArrayList<>();
+        for (String player : punishmentManager.getHistoryKeys()) {
+            for (PunishmentManager.HistoryEntry entry : punishmentManager.getHistory(player)) {
+                if (entry.issuer.equalsIgnoreCase(issuerName)) {
+                    allHistory.add(entry);
+                }
+            }
+        }
+
+        // Сортируем по времени (сначала новые)
+        allHistory.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
+
+        if (allHistory.isEmpty()) {
+            sendMessage(chatId, "[БОТ] " + issuerName + " не выдавал наказаний");
             return;
         }
 
-        String server = parts[0].toLowerCase();
-        if (!server.equals("global")) {
-            sendMessage(chatId, "[БОТ] Доступен только сервер global");
-            return;
+        List<PunishmentManager.HistoryEntry> recent = allHistory.stream()
+            .limit(limit)
+            .collect(Collectors.toList());
+
+        SimpleDateFormat sdf = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
+        sdf.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
+
+        StringBuilder response = new StringBuilder();
+        response.append("[БОТ] Наказания, выданные ").append(issuerName).append(" (последние ").append(recent.size()).append("):\n");
+        response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+        for (PunishmentManager.HistoryEntry entry : recent) {
+            String time = sdf.format(new Date(entry.timestamp));
+            String status = entry.type.equals("ban") ? "[БАН]" : 
+                           entry.type.equals("mute") ? "[МУТ]" : 
+                           entry.type.equals("kick") ? "[КИК]" : 
+                           entry.type.equals("unban") ? "[РАЗБАН]" : "[РАЗМУТ]";
+            response.append(time).append(" | ").append(status)
+                    .append(" ").append(entry.player)
+                    .append(" на ").append(entry.duration)
+                    .append(": ").append(entry.reason).append("\n");
         }
 
-        String cmd = command.substring(7).trim();
-        if (cmd.isEmpty()) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global <команда>");
-            return;
-        }
+        response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        response.append("Всего наказаний: ").append(allHistory.size());
 
-        String cmdName = cmd.split(" ")[0];
-
-        if (!groupManager.hasPermission(userId, "!rcon global " + cmdName) && 
-            !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
-            sendMessage(chatId, "[БОТ] У вас нет доступа к данной команде!");
-            plugin.getLogger().info("Доступ запрещён: " + userId + " -> " + cmdName);
-            return;
-        }
-
-        if (cmd.startsWith("bc ") || cmd.startsWith("bcast ")) {
-            handleBroadcast(chatId, cmd, userId);
-            return;
-        }
-
-        if (cmd.startsWith("ban ") || cmd.startsWith("mute ") || 
-            cmd.startsWith("kick ") || cmd.startsWith("unban ") || cmd.startsWith("unmute ")) {
-            handlePunishment(chatId, cmd, userId);
-            return;
-        }
-
-        if (cmd.startsWith("checkban ")) {
-            handleCheckBan(chatId, cmd);
-            return;
-        }
-
-        if (cmd.startsWith("banlist")) {
-            handleBanList(chatId, cmd);
-            return;
-        }
-
-        if (cmd.startsWith("shist ") || cmd.startsWith("hist ")) {
-            handleShist(chatId, cmd);
-            return;
-        }
-
-        executeServerCommand(chatId, cmd, userId);
+        sendMessage(chatId, response.toString());
     }
 
+    // ===== HIST (наказания, которые ПОЛУЧИЛ игрок) =====
+    private void handleHist(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon hist <ник> [кол-во]");
+            return;
+        }
+        
+        String playerName = parts[1];
+        int limit = 10;
+        if (parts.length >= 3) {
+            try { limit = Integer.parseInt(parts[2]); } catch (NumberFormatException e) {}
+            if (limit < 1) limit = 1;
+            if (limit > 50) limit = 50;
+        }
+
+        List<PunishmentManager.HistoryEntry> history = punishmentManager.getHistory(playerName);
+        if (history.isEmpty()) {
+            sendMessage(chatId, "[БОТ] Нет наказаний для " + playerName);
+            return;
+        }
+
+        // Сортируем по времени (сначала новые)
+        history.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
+
+        List<PunishmentManager.HistoryEntry> recent = history.stream()
+            .limit(limit)
+            .collect(Collectors.toList());
+
+        SimpleDateFormat sdf = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
+        sdf.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
+
+        StringBuilder response = new StringBuilder();
+        response.append("[БОТ] Наказания игрока ").append(playerName).append(" (последние ").append(recent.size()).append("):\n");
+        response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+        for (PunishmentManager.HistoryEntry entry : recent) {
+            String time = sdf.format(new Date(entry.timestamp));
+            String status = entry.type.equals("ban") ? "[БАН]" : 
+                           entry.type.equals("mute") ? "[МУТ]" : 
+                           entry.type.equals("kick") ? "[КИК]" : 
+                           entry.type.equals("unban") ? "[РАЗБАН]" : "[РАЗМУТ]";
+            String active = "";
+            if (entry.type.equals("ban") && punishmentManager.isBanned(playerName)) active = " [АКТИВЕН]";
+            if (entry.type.equals("mute") && punishmentManager.isMuted(playerName)) active = " [АКТИВЕН]";
+            
+            response.append(time).append(" | ").append(status)
+                    .append(" ").append(entry.issuer)
+                    .append(" на ").append(entry.duration)
+                    .append(": ").append(entry.reason).append(active).append("\n");
+        }
+
+        response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        response.append("Всего наказаний: ").append(history.size());
+
+        sendMessage(chatId, response.toString());
+    }
+
+    // ===== DUPEIP =====
+    private void handleDupeip(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon dupeip <ник>");
+            return;
+        }
+        
+        String playerName = parts[1];
+        
+        // Получаем IP игрока через PlayerManager или другие методы
+        String targetIp = getPlayerIp(playerName);
+        
+        if (targetIp == null || targetIp.equals("—") || targetIp.equals("0.0.0.0")) {
+            sendMessage(chatId, "[БОТ] Не удалось определить IP игрока " + playerName);
+            return;
+        }
+
+        // Ищем всех игроков с этим IP
+        List<String> playersWithSameIp = findPlayersByIp(targetIp);
+        
+        // Убираем самого игрока из списка (если он там есть)
+        playersWithSameIp.remove(playerName);
+
+        StringBuilder response = new StringBuilder();
+        response.append("[БОТ] Сканируем по нику: ").append(playerName).append("\n");
+        
+        if (playersWithSameIp.isEmpty()) {
+            response.append("Нет других аккаунтов с этим IP");
+        } else {
+            response.append(String.join(", ", playersWithSameIp));
+        }
+        
+        sendMessage(chatId, response.toString());
+    }
+
+    // ===== ВСПОМОГАТЕЛЬНЫЙ МЕТОД ДЛЯ ПОЛУЧЕНИЯ IP =====
+    private String getPlayerIp(String playerName) {
+        // Сначала проверяем онлайн
+        Player target = Bukkit.getPlayer(playerName);
+        if (target != null && target.isOnline() && target.getAddress() != null) {
+            return target.getAddress().getHostString();
+        }
+        
+        // Для офлайн — проверяем через PlayerManager
+        String ip = plugin.getPlayerManager().getPlayerIp(playerName);
+        if (ip != null && !ip.isEmpty()) {
+            return ip;
+        }
+        
+        // Пробуем через usercache.json
+        try {
+            File userCache = new File("usercache.json");
+            if (userCache.exists()) {
+                String content = new String(java.nio.file.Files.readAllBytes(userCache.toPath()));
+                // Ищем UUID игрока, потом по UUID ищем IP в других файлах
+                // Упрощённо — возвращаем заглушку
+            }
+        } catch (Exception e) {}
+        
+        return "—";
+    }
+
+    // ===== ВСПОМОГАТЕЛЬНЫЙ МЕТОД ДЛЯ ПОИСКА ПО IP =====
+    private List<String> findPlayersByIp(String ip) {
+        List<String> players = new ArrayList<>();
+        
+        // Проверяем онлайн игроков
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (player.getAddress() != null && ip.equals(player.getAddress().getHostString())) {
+                players.add(player.getName());
+            }
+        }
+        
+        // Проверяем офлайн через PlayerManager
+        List<String> offlinePlayers = plugin.getPlayerManager().getPlayersByIp(ip);
+        for (String name : offlinePlayers) {
+            if (!players.contains(name)) {
+                players.add(name);
+            }
+        }
+        
+        return players;
+    }
+
+    // ===== PEX USER (ТОЛЬКО ЧЕРЕЗ БОТА) =====
+    private void handlePexUser(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 3) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon pex user <ник>");
+            return;
+        }
+        
+        String playerName = parts[2];
+        Player target = Bukkit.getPlayer(playerName);
+        boolean isOnline = target != null && target.isOnline();
+
+        String group = "default";
+        boolean isOp = false;
+        boolean isWhitelisted = false;
+        String uuid = "—";
+        String ip = "—";
+
+        try {
+            // Группа
+            if (isOnline) {
+                isOp = target.isOp();
+                uuid = target.getUniqueId().toString();
+                ip = target.getAddress() != null ? target.getAddress().getHostString() : "—";
+                
+                try {
+                    net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
+                            .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
+                    if (permission != null) {
+                        group = permission.getPrimaryGroup(target);
+                    }
+                } catch (Exception e) {
+                    group = "неизвестно";
+                }
+            } else {
+                // Для офлайн — проверяем через файлы
+                group = "офлайн";
+                uuid = "—";
+                ip = getPlayerIp(playerName);
+                
+                // OP проверяем через ops.json
+                File opsFile = new File("ops.json");
+                if (opsFile.exists()) {
+                    try {
+                        String content = new String(java.nio.file.Files.readAllBytes(opsFile.toPath()));
+                        isOp = content.contains("\"name\":\"" + playerName + "\"");
+                    } catch (Exception e) {}
+                }
+            }
+
+            // Белый список проверяем всегда
+            File whitelistFile = new File("whitelist.json");
+            if (whitelistFile.exists()) {
+                try {
+                    String content = new String(java.nio.file.Files.readAllBytes(whitelistFile.toPath()));
+                    isWhitelisted = content.contains("\"name\":\"" + playerName + "\"");
+                } catch (Exception e) {}
+            }
+
+        } catch (Exception e) {
+            sendMessage(chatId, "[БОТ] Ошибка: " + e.getMessage());
+            return;
+        }
+
+        String response = "[БОТ] Ответ сервера:\n";
+        response += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        response += "Ник: " + playerName + "\n";
+        response += "Группа: " + group + "\n";
+        response += "OP: " + (isOp ? "да" : "нет") + "\n";
+        response += "IP: " + ip + "\n";
+        response += "Белый список: " + (isWhitelisted ? "да" : "нет") + "\n";
+        response += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+
+        sendMessage(chatId, response);
+    }
+
+    // ===== BROADCAST =====
     private void handleBroadcast(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
@@ -384,6 +569,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, "[БОТ] Ответ от сервера:\n[Объявление] " + message + " (пишет: " + sender + ")");
     }
 
+    // ===== НАКАЗАНИЯ =====
     private void handlePunishment(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         String action = parts[0];
@@ -485,6 +671,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, result);
     }
 
+    // ===== CHECKBAN =====
     private void handleCheckBan(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
@@ -514,6 +701,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, response);
     }
 
+    // ===== BANLIST =====
     private void handleBanList(long chatId, String cmd) {
         int page = 1;
         String[] parts = cmd.split(" ");
@@ -540,47 +728,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             }
             sendMessage(chatId, response.toString());
         }
-    }
-
-    private void handleShist(long chatId, String cmd) {
-        String[] parts = cmd.split(" ");
-        if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global shist <ник>");
-            return;
-        }
-        String target = parts[1];
-
-        List<PunishmentManager.HistoryEntry> history = punishmentManager.getHistory(target);
-        if (history.isEmpty()) {
-            sendMessage(chatId, "[БОТ] История наказаний для " + target + " пуста.");
-            return;
-        }
-
-        StringBuilder response = new StringBuilder();
-        response.append("[БОТ] История наказаний игрока ").append(target).append(" (Записей: ").append(history.size()).append(")\n");
-        response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-
-        int count = 0;
-        for (PunishmentManager.HistoryEntry entry : history) {
-            if (count >= 20) {
-                response.append("... и ещё ").append(history.size() - 20).append(" записей");
-                break;
-            }
-            String timeAgo = punishmentManager.getTimeAgo(entry.timestamp);
-            String status = entry.type.equals("ban") ?
-                (punishmentManager.isBanned(target) ? "[Активен]" : "[Истек]") : 
-                (punishmentManager.isMuted(target) ? "[Активен]" : "[Истек]");
-            String actionName = entry.getActionName();
-
-            response.append(timeAgo).append(" | ")
-                    .append(target).append(" был ").append(actionName)
-                    .append(" на ").append(entry.duration).append(" ")
-                    .append(entry.issuer).append(": ").append(entry.reason).append(" ").append(status).append("\n");
-            count++;
-        }
-        response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-
-        sendMessage(chatId, response.toString());
     }
 
     // ===== ВЫПОЛНЕНИЕ КОМАНД НА СЕРВЕРЕ =====
