@@ -7,7 +7,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -31,7 +33,7 @@ public class PlayerManager {
             try {
                 authFile.createNewFile();
             } catch (Exception e) {
-                plugin.getLogger().severe("❌ Не удалось создать auth.yml");
+                plugin.getLogger().severe("Не удалось создать auth.yml");
             }
         }
         authConfig = YamlConfiguration.loadConfiguration(authFile);
@@ -41,7 +43,7 @@ public class PlayerManager {
         try {
             authConfig.save(authFile);
         } catch (Exception e) {
-            plugin.getLogger().severe("❌ Ошибка сохранения auth.yml");
+            plugin.getLogger().severe("Ошибка сохранения auth.yml");
         }
     }
 
@@ -49,7 +51,7 @@ public class PlayerManager {
         String code = UUID.randomUUID().toString().substring(0, 6).toUpperCase();
         pendingCodes.put(code, playerName);
         codeTimestamps.put(code, System.currentTimeMillis());
-        plugin.getLogger().info("📝 Код для " + playerName + ": " + code);
+        plugin.getLogger().info("Код для " + playerName + ": " + code);
         return code;
     }
 
@@ -123,27 +125,16 @@ public class PlayerManager {
         saveAuthData();
     }
 
-    private String getPlayerIP(String playerName) {
-        Player player = Bukkit.getPlayerExact(playerName);
-        if (player != null && player.getAddress() != null) {
-            return player.getAddress().getHostString();
-        }
-        return "0.0.0.0";
+    // ============================================
+    // ==== НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С IP =====
+    // ============================================
+    public String getPlayerIp(String playerName) {
+        return authConfig.getString(playerName + ".ip", "—");
     }
 
-    public void unregister(String playerName) {
-        authConfig.set(playerName, null);
-        playerSessions.entrySet().removeIf(entry -> {
-            String name = getPlayerNameByTelegram(entry.getValue());
-            return name != null && name.equals(playerName);
-        });
-        saveAuthData();
-    }
-
-    public void kickAccount(String playerName) {
-        Player player = Bukkit.getPlayerExact(playerName);
-        if (player != null && player.isOnline()) {
-            player.kickPlayer("§cАккаунт был исключен с бота");
-        }
-    }
-}
+    public List<String> getPlayersByIp(String ip) {
+        List<String> players = new ArrayList<>();
+        for (String key : authConfig.getKeys(false)) {
+            String savedIp = authConfig.getString(key + ".ip");
+            if (ip.equals(savedIp)) {
+                players.add(key
