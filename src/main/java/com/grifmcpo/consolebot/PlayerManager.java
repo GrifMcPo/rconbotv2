@@ -137,4 +137,33 @@ public class PlayerManager {
         for (String key : authConfig.getKeys(false)) {
             String savedIp = authConfig.getString(key + ".ip");
             if (ip.equals(savedIp)) {
-                players.add(key
+                players.add(key);
+            }
+        }
+        return players;
+    }
+
+    private String getPlayerIP(String playerName) {
+        Player player = Bukkit.getPlayerExact(playerName);
+        if (player != null && player.getAddress() != null) {
+            return player.getAddress().getHostString();
+        }
+        return "0.0.0.0";
+    }
+
+    public void unregister(String playerName) {
+        authConfig.set(playerName, null);
+        playerSessions.entrySet().removeIf(entry -> {
+            String name = getPlayerNameByTelegram(entry.getValue());
+            return name != null && name.equals(playerName);
+        });
+        saveAuthData();
+    }
+
+    public void kickAccount(String playerName) {
+        Player player = Bukkit.getPlayerExact(playerName);
+        if (player != null && player.isOnline()) {
+            player.kickPlayer("Аккаунт был исключен с бота");
+        }
+    }
+}
