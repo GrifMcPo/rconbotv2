@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot; 
+package com.grifmcpo.consolebot;
  
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -195,6 +195,25 @@ public class PunishmentManager implements Listener {
         } catch (Exception e) {
             plugin.getLogger().severe("Ошибка сохранения history.yml: " + e.getMessage());
         }
+    }
+
+    // ============================================
+    // ==== НОВЫЙ МЕТОД ДЛЯ ПОЛУЧЕНИЯ ВСЕХ КЛЮЧЕЙ ИСТОРИИ =====
+    // ============================================
+    public Set<String> getHistoryKeys() {
+        return history.keySet();
+    }
+
+    // ============================================
+    // ==== МЕТОДЫ ДЛЯ СОХРАНЕНИЯ/ПОЛУЧЕНИЯ IP =====
+    // ============================================
+    public void savePlayerIp(String playerName, String ip) {
+        historyConfig.set(playerName + ".lastIp", ip);
+        saveHistory();
+    }
+
+    public String getPlayerIp(String playerName) {
+        return historyConfig.getString(playerName + ".lastIp", "—");
     }
 
     // ============================================
@@ -458,6 +477,11 @@ public class PunishmentManager implements Listener {
     public void onPlayerLogin(PlayerLoginEvent event) {
         Player player = event.getPlayer();
         String playerName = player.getName();
+
+        // Сохраняем IP при входе
+        if (player.getAddress() != null) {
+            savePlayerIp(playerName, player.getAddress().getHostString());
+        }
 
         if (isBanned(playerName)) {
             String kickMessage = getFullBanMessage(playerName);
