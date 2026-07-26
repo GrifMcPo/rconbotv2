@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot;    
+package com.grifmcpo.consolebot;  
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
@@ -9,6 +9,7 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 import java.io.File;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class TelegramConsoleBot extends JavaPlugin {
@@ -51,10 +52,8 @@ public class TelegramConsoleBot extends JavaPlugin {
         // Регистрация чат-листенера для блокировки мута
         Bukkit.getPluginManager().registerEvents(punishmentManager, this);
 
-        PluginCommand pexCommand = getCommand("pex");
-        if (pexCommand != null) {
-            pexCommand.setExecutor(new PexCommand(this));
-        }
+        // Удаляем команду /pex user (она больше не нужна на сервере)
+        // Команда доступна только через бота
 
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
@@ -116,6 +115,20 @@ public class TelegramConsoleBot extends JavaPlugin {
         }
     }
 
+    // ============================================
+    // ==== НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С IP =====
+    // ============================================
+    public String getPlayerIp(String playerName) {
+        return playerManager.getPlayerIp(playerName);
+    }
+
+    public List<String> getPlayersByIp(String ip) {
+        return playerManager.getPlayersByIp(ip);
+    }
+
+    // ============================================
+    // ==== GETTERS / SETTERS =====
+    // ============================================
     public Map<String, String> getAdmins() { return admins; }
     public long getOwnerId() { return ownerId; }
     public void addAdmin(String telegramId, String playerName) { admins.put(telegramId, playerName); saveAdmins(); }
