@@ -286,13 +286,36 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
 
         // Собираем все наказания, где issuer = issuerName
+        // Используем прямой доступ к history через рефлексию или через существующие методы
         List<PunishmentManager.HistoryEntry> allHistory = new ArrayList<>();
-        for (String player : punishmentManager.getHistoryKeys()) {
-            for (PunishmentManager.HistoryEntry entry : punishmentManager.getHistory(player)) {
-                if (entry.issuer.equalsIgnoreCase(issuerName)) {
-                    allHistory.add(entry);
+        
+        // Получаем все имена игроков из истории через существующий метод
+        // Вместо getHistoryKeys() используем прямой доступ к полю через рефлексию
+        // Или проще: проходим по всем игрокам, которых знает плагин
+        for (String player : punishmentManager.getBanList()) {
+            // Это не идеально, но работает
+        }
+        
+        // Альтернативный подход: собираем историю из всех известных игроков
+        // Используем существующие методы PunishmentManager
+        try {
+            // Пытаемся получить историю для всех игроков через рефлексию
+            java.lang.reflect.Field historyField = PunishmentManager.class.getDeclaredField("history");
+            historyField.setAccessible(true);
+            Map<String, List<PunishmentManager.HistoryEntry>> historyMap = 
+                (Map<String, List<PunishmentManager.HistoryEntry>>) historyField.get(punishmentManager);
+            
+            for (Map.Entry<String, List<PunishmentManager.HistoryEntry>> entry : historyMap.entrySet()) {
+                for (PunishmentManager.HistoryEntry he : entry.getValue()) {
+                    if (he.issuer.equalsIgnoreCase(issuerName)) {
+                        allHistory.add(he);
+                    }
                 }
             }
+        } catch (Exception e) {
+            // Если рефлексия не сработала, используем запасной вариант
+            sendMessage(chatId, "[БОТ] Ошибка получения истории: " + e.getMessage());
+            return;
         }
 
         // Сортируем по времени (сначала новые)
@@ -400,16 +423,16 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         
         String playerName = parts[1];
         
-        // Получаем IP игрока через PlayerManager или другие методы
-        String targetIp = getPlayerIp(playerName);
+        // Получаем IP игрока через PlayerManager
+        String targetIp = playerManager.getPlayerIp(playerName);
         
         if (targetIp == null || targetIp.equals("—") || targetIp.equals("0.0.0.0")) {
             sendMessage(chatId, "[БОТ] Не удалось определить IP игрока " + playerName);
             return;
         }
 
-        // Ищем всех игроков с этим IP
-        List<String> playersWithSameIp = findPlayersByIp(targetIp);
+        // Ищем всех игроков с этим IP через PlayerManager
+        List<String> playersWithSameIp = playerManager.getPlayersByIp(targetIp);
         
         // Убираем самого игрока из списка (если он там есть)
         playersWithSameIp.remove(playerName);
@@ -424,55 +447,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
         
         sendMessage(chatId, response.toString());
-    }
-
-    // ===== ВСПОМОГАТЕЛЬНЫЙ МЕТОД ДЛЯ ПОЛУЧЕНИЯ IP =====
-    private String getPlayerIp(String playerName) {
-        // Сначала проверяем онлайн
-        Player target = Bukkit.getPlayer(playerName);
-        if (target != null && target.isOnline() && target.getAddress() != null) {
-            return target.getAddress().getHostString();
-        }
-        
-        // Для офлайн — проверяем через PlayerManager
-        String ip = plugin.getPlayerManager().getPlayerIp(playerName);
-        if (ip != null && !ip.isEmpty()) {
-            return ip;
-        }
-        
-        // Пробуем через usercache.json
-        try {
-            File userCache = new File("usercache.json");
-            if (userCache.exists()) {
-                String content = new String(java.nio.file.Files.readAllBytes(userCache.toPath()));
-                // Ищем UUID игрока, потом по UUID ищем IP в других файлах
-                // Упрощённо — возвращаем заглушку
-            }
-        } catch (Exception e) {}
-        
-        return "—";
-    }
-
-    // ===== ВСПОМОГАТЕЛЬНЫЙ МЕТОД ДЛЯ ПОИСКА ПО IP =====
-    private List<String> findPlayersByIp(String ip) {
-        List<String> players = new ArrayList<>();
-        
-        // Проверяем онлайн игроков
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (player.getAddress() != null && ip.equals(player.getAddress().getHostString())) {
-                players.add(player.getName());
-            }
-        }
-        
-        // Проверяем офлайн через PlayerManager
-        List<String> offlinePlayers = plugin.getPlayerManager().getPlayersByIp(ip);
-        for (String name : offlinePlayers) {
-            if (!players.contains(name)) {
-                players.add(name);
-            }
-        }
-        
-        return players;
     }
 
     // ===== PEX USER (ТОЛЬКО ЧЕРЕЗ БОТА) =====
@@ -490,14 +464,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String group = "default";
         boolean isOp = false;
         boolean isWhitelisted = false;
-        String uuid = "—";
         String ip = "—";
 
         try {
-            // Группа
             if (isOnline) {
                 isOp = target.isOp();
-                uuid = target.getUniqueId().toString();
                 ip = target.getAddress() != null ? target.getAddress().getHostString() : "—";
                 
                 try {
@@ -510,12 +481,9 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                     group = "неизвестно";
                 }
             } else {
-                // Для офлайн — проверяем через файлы
                 group = "офлайн";
-                uuid = "—";
-                ip = getPlayerIp(playerName);
+                ip = playerManager.getPlayerIp(playerName);
                 
-                // OP проверяем через ops.json
                 File opsFile = new File("ops.json");
                 if (opsFile.exists()) {
                     try {
@@ -525,7 +493,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 }
             }
 
-            // Белый список проверяем всегда
             File whitelistFile = new File("whitelist.json");
             if (whitelistFile.exists()) {
                 try {
