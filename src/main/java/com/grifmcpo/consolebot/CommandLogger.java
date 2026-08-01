@@ -43,7 +43,7 @@ public class CommandLogger {
             }
             logCache.clear();
         } catch (IOException e) {
-            plugin.getLogger().warning("❌ Ошибка сохранения логов: " + e.getMessage());
+            plugin.getLogger().warning("Ошибка сохранения логов: " + e.getMessage());
         }
     }
 
@@ -63,7 +63,7 @@ public class CommandLogger {
                     }
                 }
             } catch (IOException e) {
-                plugin.getLogger().warning("❌ Ошибка загрузки логов из " + file.getName());
+                plugin.getLogger().warning("Ошибка загрузки логов из " + file.getName());
             }
         }
         if (logCache.size() > maxLogs) {
@@ -86,6 +86,41 @@ public class CommandLogger {
                 })
                 .sorted((a, b) -> b.timestamp.compareTo(a.timestamp))
                 .collect(Collectors.toList());
+    }
+
+    public String getFormattedLogs(String playerName, int limit) {
+        List<LogEntry> logs = getLogs(playerName, 30);
+        if (logs.isEmpty()) {
+            return "[БОТ] Нет логов для " + playerName;
+        }
+
+        List<LogEntry> recent = logs.stream()
+            .limit(limit > 0 ? limit : 10)
+            .collect(Collectors.toList());
+
+        SimpleDateFormat sdf = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
+        sdf.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("[БОТ] Ответ сервера:\n");
+        sb.append("Логи игрока ").append(playerName).append(" (последние ").append(recent.size()).append("):\n");
+        sb.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+        for (LogEntry entry : recent) {
+            String time = entry.timestamp;
+            try {
+                SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                inputFormat.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
+                Date date = inputFormat.parse(entry.timestamp);
+                time = sdf.format(date);
+            } catch (Exception e) {}
+            sb.append(time).append(" | ").append(entry.command).append("\n");
+        }
+
+        sb.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        sb.append("Всего записей: ").append(logs.size());
+
+        return sb.toString();
     }
 
     public static class LogEntry {
