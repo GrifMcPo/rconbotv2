@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot; 
+package com.grifmcpo.consolebot;
  
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -16,7 +16,7 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;  // <--- ДОБАВЛЯЕМ ЭТОТ ИМПОРТ
+import java.util.stream.Collectors;
 
 public class PunishmentManager implements Listener {
 
@@ -246,8 +246,9 @@ public class PunishmentManager implements Listener {
             }
 
             if (!finalHidden) {
-                String msg = "§fИгрок §9" + finalIssuer + " §fзабанил §c" + finalPlayerName +
-                        " §fна §b" + formatDuration(finalDuration) + " §fпо причине: §7" + finalReason;
+                String timeStr = finalDuration.equals("навсегда") ? "" : " на §b" + formatDuration(finalDuration) + " §f";
+                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fзабанил §c" + finalPlayerName + 
+                             timeStr + "§fпо причине: §7" + finalReason + " (глобальный)";
                 Bukkit.broadcastMessage(msg);
             }
 
@@ -287,8 +288,8 @@ public class PunishmentManager implements Listener {
             banReasons.remove(finalPlayerName);
             saveHistory();
 
-            String msg = "§fИгрок §9" + finalIssuer + " §fразбанил §c" + finalPlayerName +
-                    " §fпо причине: §7" + finalReason;
+            String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fразбанил §c" + finalPlayerName + 
+                         " §fпо причине: §7" + finalReason + " (глобальный)";
             Bukkit.broadcastMessage(msg);
 
             if (adminLogger != null) {
@@ -346,8 +347,9 @@ public class PunishmentManager implements Listener {
             }
 
             if (!finalHidden) {
-                String msg = "§fИгрок §9" + finalIssuer + " §fзамутил §c" + finalPlayerName +
-                        " §fна §b" + formatDuration(finalDuration) + " §fпо причине: §7" + finalReason;
+                String timeStr = finalDuration.equals("навсегда") ? "" : " на §b" + formatDuration(finalDuration) + " §f";
+                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fзамутил §c" + finalPlayerName + 
+                             timeStr + "§fпо причине: §7" + finalReason + " (глобальный)";
                 Bukkit.broadcastMessage(msg);
             }
 
@@ -387,8 +389,8 @@ public class PunishmentManager implements Listener {
             muteReasons.remove(finalPlayerName);
             saveHistory();
 
-            String msg = "§fИгрок §9" + finalIssuer + " §fразмутил §c" + finalPlayerName +
-                    " §fпо причине: §7" + finalReason;
+            String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fразмутил §c" + finalPlayerName + 
+                         " §fпо причине: §7" + finalReason + " (глобальный)";
             Bukkit.broadcastMessage(msg);
 
             Player player = Bukkit.getPlayer(finalPlayerName);
@@ -438,8 +440,8 @@ public class PunishmentManager implements Listener {
             player.kickPlayer("§cВы были кикнуты!\n§7Причина: " + finalReason);
 
             if (!finalHidden) {
-                String msg = "§fИгрок §9" + finalIssuer + " §fкикнул §c" + finalPlayerName +
-                        " §fпо причине: §7" + finalReason;
+                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fкикнул §c" + finalPlayerName + 
+                             " §fпо причине: §7" + finalReason + " (глобальный)";
                 Bukkit.broadcastMessage(msg);
             }
 
@@ -688,6 +690,26 @@ public class PunishmentManager implements Listener {
     }
 
     // ============================================
+    // ==== ФОРМАТИРОВАНИЕ ВРЕМЕНИ =====
+    // ============================================
+
+    public String formatDuration(String duration) {
+        if (duration == null || duration.equals("навсегда")) return "навсегда";
+        char unit = duration.charAt(duration.length() - 1);
+        long value = Long.parseLong(duration.substring(0, duration.length() - 1));
+        switch (unit) {
+            case 's': return value + " сек";
+            case 'm': return value + " мин";
+            case 'h': return value + " ч";
+            case 'd': return value + " дн";
+            case 'w': return value + " нед";
+            case 'M': return value + " мес";
+            case 'y': return value + " лет";
+            default: return duration;
+        }
+    }
+
+    // ============================================
     // ==== КРАСИВЫЙ ВЫВОД ИСТОРИИ =====
     // ============================================
 
@@ -830,22 +852,6 @@ public class PunishmentManager implements Listener {
             case 'M': return value * 30L * 24 * 60 * 60 * 1000;
             case 'y': return value * 365L * 24 * 60 * 60 * 1000;
             default: return Long.MAX_VALUE;
-        }
-    }
-
-    private String formatDuration(String duration) {
-        if (duration == null || duration.equals("навсегда")) return "навсегда";
-        char unit = duration.charAt(duration.length() - 1);
-        long value = Long.parseLong(duration.substring(0, duration.length() - 1));
-        switch (unit) {
-            case 's': return value + " сек";
-            case 'm': return value + " мин";
-            case 'h': return value + " ч";
-            case 'd': return value + " дн";
-            case 'w': return value + " нед";
-            case 'M': return value + " мес";
-            case 'y': return value + " лет";
-            default: return duration;
         }
     }
 
