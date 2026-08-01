@@ -16,6 +16,7 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;  // <--- ДОБАВЛЯЕМ ЭТОТ ИМПОРТ
 
 public class PunishmentManager implements Listener {
 
@@ -698,9 +699,12 @@ public class PunishmentManager implements Listener {
 
         historyList.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
 
-        List<HistoryEntry> recent = historyList.stream()
-            .limit(limit > 0 ? limit : historyList.size())
-            .collect(Collectors.toList());
+        List<HistoryEntry> recent;
+        if (limit > 0) {
+            recent = historyList.stream().limit(limit).collect(Collectors.toList());
+        } else {
+            recent = new ArrayList<>(historyList);
+        }
 
         StringBuilder sb = new StringBuilder();
         sb.append("[БОТ] Ответ сервера:\n");
@@ -762,9 +766,12 @@ public class PunishmentManager implements Listener {
 
         allHistory.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
 
-        List<HistoryEntry> recent = allHistory.stream()
-            .limit(limit > 0 ? limit : allHistory.size())
-            .collect(Collectors.toList());
+        List<HistoryEntry> recent;
+        if (limit > 0) {
+            recent = allHistory.stream().limit(limit).collect(Collectors.toList());
+        } else {
+            recent = new ArrayList<>(allHistory);
+        }
 
         StringBuilder sb = new StringBuilder();
         sb.append("[БОТ] Ответ сервера:\n");
