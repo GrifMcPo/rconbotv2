@@ -2,17 +2,57 @@ name: TelegramConsoleBot
 version: 2.0
 main: com.grifmcpo.consolebot.TelegramConsoleBot
 api-version: 1.21
-author: GrifMcPo
-description: Бот для управления сервером через Telegram
+author: GrifMcPO
+description: Telegram Console Bot with punishment system
 
 commands:
-  pex:
-    description: Информация об игроке
-    usage: /pex user <ник>
-    permission: pex.use
-    aliases: [playerinfo, info]
+  ban:
+    description: Забанить игрока
+    usage: /ban <ник> <время> <причина>
+    permission: telegramconsolebot.ban
+  mute:
+    description: Замутить игрока
+    usage: /mute <ник> <время> <причина>
+    permission: telegramconsolebot.mute
+  kick:
+    description: Кикнуть игрока
+    usage: /kick <ник> <причина>
+    permission: telegramconsolebot.kick
+  bc:
+    description: Объявление в чат
+    usage: /bc <сообщение>
+    permission: telegramconsolebot.bc
+  logs:
+    description: Логи команд игрока
+    usage: /logs <ник> [кол-во]
+    permission: telegramconsolebot.logs
+  hist:
+    description: История наказаний игрока
+    usage: /hist <ник> [кол-во]
+    permission: telegramconsolebot.hist
+  shist:
+    description: Наказания выданные игроком
+    usage: /shist <ник> [кол-во]
+    permission: telegramconsolebot.shists
+  dupeip:
+    description: Поиск аккаунтов по IP
+    usage: /dupeip <ник>
+    permission: telegramconsolebot.dupeip
 
 permissions:
-  pex.use:
-    description: Доступ к команде /pex
+  telegramconsolebot.ban:
+    default: op
+  telegramconsolebot.mute:
+    default: op
+  telegramconsolebot.kick:
+    default: op
+  telegramconsolebot.bc:
+    default: op
+  telegramconsolebot.logs:
+    default: op
+  telegramconsolebot.hist:
+    default: op
+  telegramconsolebot.shists:
+    default: op
+  telegramconsolebot.dupeip:
     default: op
