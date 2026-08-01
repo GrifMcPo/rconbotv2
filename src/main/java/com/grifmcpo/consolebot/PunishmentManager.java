@@ -201,11 +201,7 @@ public class PunishmentManager implements Listener {
     // ============================================
     // ==== БАН =====
     // ============================================
-    public boolean banPlayer(String playerName, String issuer, String reason, String duration) {
-        return banPlayer(playerName, issuer, reason, duration, false);
-    }
-
-    public boolean banPlayer(String playerName, String issuer, String reason, String duration, boolean hidden) {
+    public boolean banPlayer(String playerName, String issuer, String reason, String duration, boolean hidden, boolean broadcast) {
         if (isBanned(playerName)) {
             return false;
         }
@@ -215,6 +211,7 @@ public class PunishmentManager implements Listener {
         final String finalReason = reason;
         final String finalDuration = duration;
         final boolean finalHidden = hidden;
+        final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             HistoryEntry entry = new HistoryEntry();
@@ -245,8 +242,8 @@ public class PunishmentManager implements Listener {
                 player.kickPlayer(kickMessage);
             }
 
-            if (!finalHidden) {
-                String timeStr = finalDuration.equals("навсегда") ? "" : " на §b" + formatDuration(finalDuration) + " §f";
+            if (finalBroadcast && !finalHidden) {
+                String timeStr = finalDuration.equals("навсегда") ? "" : " §fна §b" + formatDuration(finalDuration) + " §f";
                 String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fзабанил §c" + finalPlayerName + 
                              timeStr + "§fпо причине: §7" + finalReason + " (глобальный)";
                 Bukkit.broadcastMessage(msg);
@@ -260,10 +257,14 @@ public class PunishmentManager implements Listener {
         return true;
     }
 
+    public boolean banPlayer(String playerName, String issuer, String reason, String duration) {
+        return banPlayer(playerName, issuer, reason, duration, false, true);
+    }
+
     // ============================================
     // ==== РАЗБАН =====
     // ============================================
-    public boolean unbanPlayer(String playerName, String issuer, String reason) {
+    public boolean unbanPlayer(String playerName, String issuer, String reason, boolean broadcast) {
         if (!isBanned(playerName)) {
             return false;
         }
@@ -271,6 +272,7 @@ public class PunishmentManager implements Listener {
         final String finalPlayerName = playerName;
         final String finalIssuer = issuer;
         final String finalReason = reason;
+        final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             HistoryEntry entry = new HistoryEntry();
@@ -288,9 +290,11 @@ public class PunishmentManager implements Listener {
             banReasons.remove(finalPlayerName);
             saveHistory();
 
-            String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fразбанил §c" + finalPlayerName + 
-                         " §fпо причине: §7" + finalReason + " (глобальный)";
-            Bukkit.broadcastMessage(msg);
+            if (finalBroadcast) {
+                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fразбанил §c" + finalPlayerName + 
+                             " §fпо причине: §7" + finalReason + " (глобальный)";
+                Bukkit.broadcastMessage(msg);
+            }
 
             if (adminLogger != null) {
                 adminLogger.log("UNBAN", finalPlayerName, finalIssuer, finalReason, "навсегда", "ПУБЛИЧНО");
@@ -300,14 +304,14 @@ public class PunishmentManager implements Listener {
         return true;
     }
 
+    public boolean unbanPlayer(String playerName, String issuer, String reason) {
+        return unbanPlayer(playerName, issuer, reason, true);
+    }
+
     // ============================================
     // ==== МУТ =====
     // ============================================
-    public boolean mutePlayer(String playerName, String issuer, String reason, String duration) {
-        return mutePlayer(playerName, issuer, reason, duration, false);
-    }
-
-    public boolean mutePlayer(String playerName, String issuer, String reason, String duration, boolean hidden) {
+    public boolean mutePlayer(String playerName, String issuer, String reason, String duration, boolean hidden, boolean broadcast) {
         if (isMuted(playerName)) {
             return false;
         }
@@ -317,6 +321,7 @@ public class PunishmentManager implements Listener {
         final String finalReason = reason;
         final String finalDuration = duration;
         final boolean finalHidden = hidden;
+        final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             HistoryEntry entry = new HistoryEntry();
@@ -346,8 +351,8 @@ public class PunishmentManager implements Listener {
                 player.sendMessage(muteMessage);
             }
 
-            if (!finalHidden) {
-                String timeStr = finalDuration.equals("навсегда") ? "" : " на §b" + formatDuration(finalDuration) + " §f";
+            if (finalBroadcast && !finalHidden) {
+                String timeStr = finalDuration.equals("навсегда") ? "" : " §fна §b" + formatDuration(finalDuration) + " §f";
                 String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fзамутил §c" + finalPlayerName + 
                              timeStr + "§fпо причине: §7" + finalReason + " (глобальный)";
                 Bukkit.broadcastMessage(msg);
@@ -361,10 +366,14 @@ public class PunishmentManager implements Listener {
         return true;
     }
 
+    public boolean mutePlayer(String playerName, String issuer, String reason, String duration) {
+        return mutePlayer(playerName, issuer, reason, duration, false, true);
+    }
+
     // ============================================
     // ==== РАЗМУТ =====
     // ============================================
-    public boolean unmutePlayer(String playerName, String issuer, String reason) {
+    public boolean unmutePlayer(String playerName, String issuer, String reason, boolean broadcast) {
         if (!isMuted(playerName)) {
             return false;
         }
@@ -372,6 +381,7 @@ public class PunishmentManager implements Listener {
         final String finalPlayerName = playerName;
         final String finalIssuer = issuer;
         final String finalReason = reason;
+        final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             HistoryEntry entry = new HistoryEntry();
@@ -389,9 +399,11 @@ public class PunishmentManager implements Listener {
             muteReasons.remove(finalPlayerName);
             saveHistory();
 
-            String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fразмутил §c" + finalPlayerName + 
-                         " §fпо причине: §7" + finalReason + " (глобальный)";
-            Bukkit.broadcastMessage(msg);
+            if (finalBroadcast) {
+                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fразмутил §c" + finalPlayerName + 
+                             " §fпо причине: §7" + finalReason + " (глобальный)";
+                Bukkit.broadcastMessage(msg);
+            }
 
             Player player = Bukkit.getPlayer(finalPlayerName);
             if (player != null && player.isOnline()) {
@@ -406,18 +418,19 @@ public class PunishmentManager implements Listener {
         return true;
     }
 
+    public boolean unmutePlayer(String playerName, String issuer, String reason) {
+        return unmutePlayer(playerName, issuer, reason, true);
+    }
+
     // ============================================
     // ==== КИК =====
     // ============================================
-    public boolean kickPlayer(String playerName, String issuer, String reason) {
-        return kickPlayer(playerName, issuer, reason, false);
-    }
-
-    public boolean kickPlayer(String playerName, String issuer, String reason, boolean hidden) {
+    public boolean kickPlayer(String playerName, String issuer, String reason, boolean hidden, boolean broadcast) {
         final String finalPlayerName = playerName;
         final String finalIssuer = issuer;
         final String finalReason = reason;
         final boolean finalHidden = hidden;
+        final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             Player player = Bukkit.getPlayer(finalPlayerName);
@@ -439,7 +452,7 @@ public class PunishmentManager implements Listener {
 
             player.kickPlayer("§cВы были кикнуты!\n§7Причина: " + finalReason);
 
-            if (!finalHidden) {
+            if (finalBroadcast && !finalHidden) {
                 String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fкикнул §c" + finalPlayerName + 
                              " §fпо причине: §7" + finalReason + " (глобальный)";
                 Bukkit.broadcastMessage(msg);
@@ -451,6 +464,10 @@ public class PunishmentManager implements Listener {
         });
 
         return true;
+    }
+
+    public boolean kickPlayer(String playerName, String issuer, String reason) {
+        return kickPlayer(playerName, issuer, reason, false, true);
     }
 
     // ============================================
