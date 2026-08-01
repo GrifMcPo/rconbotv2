@@ -67,7 +67,8 @@ public class PlayerCommands implements CommandExecutor {
         String reason = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
         String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
 
-        boolean success = punishmentManager.banPlayer(playerName, issuer, reason, duration, false);
+        // banPlayer(playerName, issuer, reason, duration, hidden, broadcast)
+        boolean success = punishmentManager.banPlayer(playerName, issuer, reason, duration, false, true);
         if (success) {
             sender.sendMessage("§aИгрок " + playerName + " забанен на " + duration + " по причине: " + reason);
             commandLogger.logCommand(sender.getName(), "ban " + playerName + " " + duration + " " + reason);
@@ -94,7 +95,8 @@ public class PlayerCommands implements CommandExecutor {
         String reason = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
         String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
 
-        boolean success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, false);
+        // mutePlayer(playerName, issuer, reason, duration, hidden, broadcast)
+        boolean success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, false, true);
         if (success) {
             sender.sendMessage("§aИгрок " + playerName + " замучен на " + duration + " по причине: " + reason);
             commandLogger.logCommand(sender.getName(), "mute " + playerName + " " + duration + " " + reason);
@@ -119,7 +121,8 @@ public class PlayerCommands implements CommandExecutor {
         String reason = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
         String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
 
-        boolean success = punishmentManager.kickPlayer(playerName, issuer, reason, false);
+        // kickPlayer(playerName, issuer, reason, hidden, broadcast)
+        boolean success = punishmentManager.kickPlayer(playerName, issuer, reason, false, true);
         if (success) {
             sender.sendMessage("§aИгрок " + playerName + " кикнут по причине: " + reason);
             commandLogger.logCommand(sender.getName(), "kick " + playerName + " " + reason);
