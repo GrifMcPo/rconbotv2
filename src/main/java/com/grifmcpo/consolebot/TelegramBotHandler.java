@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot; 
+package com.grifmcpo.consolebot;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -393,7 +393,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String lastArg = parts[parts.length - 1];
         if (lastArg.equalsIgnoreCase("-s")) {
             hidden = true;
-            // Убираем -s из массива
             parts = Arrays.copyOf(parts, parts.length - 1);
         }
 
@@ -418,11 +417,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         boolean success = false;
         String result = "";
+        boolean broadcast = !hidden;
 
         switch (action) {
             case "ban":
-                // banPlayer(playerName, issuer, reason, duration, hidden, broadcast)
-                success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, false);
+                success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, broadcast);
                 if (success) {
                     result = "[БОТ] Ответ сервера:\n";
                     if (hidden) {
@@ -438,8 +437,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
 
             case "mute":
-                // mutePlayer(playerName, issuer, reason, duration, hidden, broadcast)
-                success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, false);
+                success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, broadcast);
                 if (success) {
                     result = "[БОТ] Ответ сервера:\n";
                     if (hidden) {
@@ -455,8 +453,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
 
             case "kick":
-                // kickPlayer(playerName, issuer, reason, hidden, broadcast)
-                success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden, false);
+                success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden, broadcast);
                 if (success) {
                     result = "[БОТ] Ответ сервера:\n";
                     if (hidden) {
@@ -472,8 +469,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
 
             case "unban":
-                // unbanPlayer(playerName, issuer, reason, broadcast)
-                success = punishmentManager.unbanPlayer(playerName, issuer, reason, false);
+                success = punishmentManager.unbanPlayer(playerName, issuer, reason, broadcast);
                 if (success) {
                     result = "[БОТ] Ответ сервера:\n❨！❩ Игрок " + issuer + " разбанил " + playerName + 
                               " по причине: " + reason + " (глобальный)";
@@ -483,8 +479,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
 
             case "unmute":
-                // unmutePlayer(playerName, issuer, reason, broadcast)
-                success = punishmentManager.unmutePlayer(playerName, issuer, reason, false);
+                success = punishmentManager.unmutePlayer(playerName, issuer, reason, broadcast);
                 if (success) {
                     result = "[БОТ] Ответ сервера:\n❨！❩ Игрок " + issuer + " размутил " + playerName + 
                               " по причине: " + reason + " (глобальный)";
