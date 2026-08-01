@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot; 
+package com.grifmcpo.consolebot;
  
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -155,7 +155,7 @@ public class PunishmentManager implements Listener {
                 banIssuers.remove(playerName);
                 banReasons.remove(playerName);
                 plugin.getLogger().info("Автоснятие бана: " + playerName);
-                Bukkit.broadcastMessage("Игрок " + playerName + " был автоматически разбанен (срок истек)");
+                // Убрали broadcast сообщение
             }
         }
 
