@@ -13,7 +13,8 @@ public class CommandExecutor {
 
     public String executeCommand(String command, String senderName) {
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
-        return "✅ Команда выполнена: " + command;
+        plugin.getLogger().info("Команда выполнена: " + command + " (от " + senderName + ")");
+        return "Команда выполнена: " + command;
     }
 
     public void close() {}
