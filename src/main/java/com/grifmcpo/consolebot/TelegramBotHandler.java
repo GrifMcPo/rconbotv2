@@ -421,6 +421,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         switch (action) {
             case "ban":
+                // banPlayer(playerName, issuer, reason, duration, hidden, broadcast)
                 success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, false);
                 if (success) {
                     result = "[БОТ] Ответ сервера:\n";
@@ -437,6 +438,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
 
             case "mute":
+                // mutePlayer(playerName, issuer, reason, duration, hidden, broadcast)
                 success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, false);
                 if (success) {
                     result = "[БОТ] Ответ сервера:\n";
@@ -453,6 +455,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
 
             case "kick":
+                // kickPlayer(playerName, issuer, reason, hidden, broadcast)
                 success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden, false);
                 if (success) {
                     result = "[БОТ] Ответ сервера:\n";
@@ -469,6 +472,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
 
             case "unban":
+                // unbanPlayer(playerName, issuer, reason, broadcast)
                 success = punishmentManager.unbanPlayer(playerName, issuer, reason, false);
                 if (success) {
                     result = "[БОТ] Ответ сервера:\n❨！❩ Игрок " + issuer + " разбанил " + playerName + 
@@ -479,6 +483,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
 
             case "unmute":
+                // unmutePlayer(playerName, issuer, reason, broadcast)
                 success = punishmentManager.unmutePlayer(playerName, issuer, reason, false);
                 if (success) {
                     result = "[БОТ] Ответ сервера:\n❨！❩ Игрок " + issuer + " размутил " + playerName + 
