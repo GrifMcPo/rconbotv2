@@ -395,7 +395,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             hidden = true;
             // Убираем -s из массива
             parts = Arrays.copyOf(parts, parts.length - 1);
-            cmd = String.join(" ", parts);
         }
 
         String duration = "навсегда";
@@ -419,15 +418,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         boolean success = false;
         String result = "";
-        String chatMessage = "";
 
         switch (action) {
             case "ban":
-                success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden);
+                success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, false);
                 if (success) {
-                    String timeStr = duration.equals("навсегда") ? "" : " на §b" + formatDuration(duration) + " §f";
-                    chatMessage = "§c§l(! ) §9Игрок " + issuer + " §fзабанил §c" + playerName + 
-                                  timeStr + "§fпо причине: §7" + reason + " (глобальный)";
                     result = "[БОТ] Ответ сервера:\n";
                     if (hidden) {
                         result += "[Скрыто] ❨！❩ Игрок " + issuer + " забанил " + playerName + 
@@ -436,20 +431,14 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                         result += "❨！❩ Игрок " + issuer + " забанил " + playerName + 
                                   " на " + duration + " по причине: " + reason + " (глобальный)";
                     }
-                    if (!hidden) {
-                        Bukkit.broadcastMessage(chatMessage);
-                    }
                 } else {
                     result = "[БОТ] " + playerName + " уже забанен!";
                 }
                 break;
 
             case "mute":
-                success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden);
+                success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, false);
                 if (success) {
-                    String timeStr = duration.equals("навсегда") ? "" : " на §b" + formatDuration(duration) + " §f";
-                    chatMessage = "§c§l(! ) §9Игрок " + issuer + " §fзамутил §c" + playerName + 
-                                  timeStr + "§fпо причине: §7" + reason + " (глобальный)";
                     result = "[БОТ] Ответ сервера:\n";
                     if (hidden) {
                         result += "[Скрыто] ❨！❩ Игрок " + issuer + " замутил " + playerName + 
@@ -458,19 +447,14 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                         result += "❨！❩ Игрок " + issuer + " замутил " + playerName + 
                                   " на " + duration + " по причине: " + reason + " (глобальный)";
                     }
-                    if (!hidden) {
-                        Bukkit.broadcastMessage(chatMessage);
-                    }
                 } else {
                     result = "[БОТ] " + playerName + " уже замучен!";
                 }
                 break;
 
             case "kick":
-                success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden);
+                success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden, false);
                 if (success) {
-                    chatMessage = "§c§l(! ) §9Игрок " + issuer + " §fкикнул §c" + playerName + 
-                                  " §fпо причине: §7" + reason + " (глобальный)";
                     result = "[БОТ] Ответ сервера:\n";
                     if (hidden) {
                         result += "[Скрыто] ❨！❩ Игрок " + issuer + " кикнул " + playerName + 
@@ -479,35 +463,26 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                         result += "❨！❩ Игрок " + issuer + " кикнул " + playerName + 
                                   " по причине: " + reason + " (глобальный)";
                     }
-                    if (!hidden) {
-                        Bukkit.broadcastMessage(chatMessage);
-                    }
                 } else {
                     result = "[БОТ] " + playerName + " не найден!";
                 }
                 break;
 
             case "unban":
-                success = punishmentManager.unbanPlayer(playerName, issuer, reason);
+                success = punishmentManager.unbanPlayer(playerName, issuer, reason, false);
                 if (success) {
-                    chatMessage = "§c§l(! ) §9Игрок " + issuer + " §fразбанил §c" + playerName + 
-                                  " §fпо причине: §7" + reason + " (глобальный)";
                     result = "[БОТ] Ответ сервера:\n❨！❩ Игрок " + issuer + " разбанил " + playerName + 
                               " по причине: " + reason + " (глобальный)";
-                    Bukkit.broadcastMessage(chatMessage);
                 } else {
                     result = "[БОТ] " + playerName + " не забанен!";
                 }
                 break;
 
             case "unmute":
-                success = punishmentManager.unmutePlayer(playerName, issuer, reason);
+                success = punishmentManager.unmutePlayer(playerName, issuer, reason, false);
                 if (success) {
-                    chatMessage = "§c§l(! ) §9Игрок " + issuer + " §fразмутил §c" + playerName + 
-                                  " §fпо причине: §7" + reason + " (глобальный)";
                     result = "[БОТ] Ответ сервера:\n❨！❩ Игрок " + issuer + " размутил " + playerName + 
                               " по причине: " + reason + " (глобальный)";
-                    Bukkit.broadcastMessage(chatMessage);
                 } else {
                     result = "[БОТ] " + playerName + " не замучен!";
                 }
@@ -517,22 +492,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, result);
         if (hidden) {
             notifyStaffOnly("СКРЫТОЕ НАКАЗАНИЕ\n" + action + " " + playerName + "\nПричина: " + reason + "\nСрок: " + duration + "\nВыдал: " + issuer);
-        }
-    }
-
-    private String formatDuration(String duration) {
-        if (duration == null || duration.equals("навсегда")) return "навсегда";
-        char unit = duration.charAt(duration.length() - 1);
-        long value = Long.parseLong(duration.substring(0, duration.length() - 1));
-        switch (unit) {
-            case 's': return value + " сек";
-            case 'm': return value + " мин";
-            case 'h': return value + " ч";
-            case 'd': return value + " дн";
-            case 'w': return value + " нед";
-            case 'M': return value + " мес";
-            case 'y': return value + " лет";
-            default: return duration;
         }
     }
 
