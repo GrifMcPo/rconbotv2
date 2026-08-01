@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot;
+package com.grifmcpo.consolebot; 
 
 import org.bukkit.plugin.java.JavaPlugin;
 
