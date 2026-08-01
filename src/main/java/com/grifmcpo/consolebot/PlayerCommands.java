@@ -7,6 +7,8 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.Arrays;
+
 public class PlayerCommands implements CommandExecutor {
 
     private final JavaPlugin plugin;
@@ -62,7 +64,7 @@ public class PlayerCommands implements CommandExecutor {
 
         String playerName = args[0];
         String duration = args[1];
-        String reason = String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length));
+        String reason = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
         String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
 
         boolean success = punishmentManager.banPlayer(playerName, issuer, reason, duration, false);
@@ -89,7 +91,7 @@ public class PlayerCommands implements CommandExecutor {
 
         String playerName = args[0];
         String duration = args[1];
-        String reason = String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length));
+        String reason = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
         String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
 
         boolean success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, false);
@@ -114,7 +116,7 @@ public class PlayerCommands implements CommandExecutor {
         }
 
         String playerName = args[0];
-        String reason = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
+        String reason = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
         String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
 
         boolean success = punishmentManager.kickPlayer(playerName, issuer, reason, false);
@@ -194,4 +196,62 @@ public class PlayerCommands implements CommandExecutor {
     }
 
     private boolean handleShist(CommandSender sender, String[] args) {
-        if (!sender.hasPermission("telegramconsolebot.sh
+        if (!sender.hasPermission("telegramconsolebot.shists")) {
+            sender.sendMessage("§cУ вас нет прав на использование этой команды!");
+            return true;
+        }
+
+        if (args.length < 1) {
+            sender.sendMessage("§cИспользование: /shist <ник> [кол-во]");
+            return true;
+        }
+
+        String playerName = args[0];
+        int limit = 10;
+        if (args.length >= 2) {
+            try { limit = Integer.parseInt(args[1]); } catch (NumberFormatException e) {}
+        }
+
+        String response = punishmentManager.getFormattedShist(playerName, limit);
+        sender.sendMessage(response.replace("[БОТ] Ответ сервера:\n", ""));
+        commandLogger.logCommand(sender.getName(), "shist " + playerName);
+        return true;
+    }
+
+    private boolean handleDupeip(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("telegramconsolebot.dupeip")) {
+            sender.sendMessage("§cУ вас нет прав на использование этой команды!");
+            return true;
+        }
+
+        if (args.length < 1) {
+            sender.sendMessage("§cИспользование: /dupeip <ник>");
+            return true;
+        }
+
+        String playerName = args[0];
+        String targetIp = playerManager.getPlayerIp(playerName);
+
+        if (targetIp == null || targetIp.equals("—") || targetIp.equals("0.0.0.0")) {
+            sender.sendMessage("§cНе удалось определить IP игрока " + playerName);
+            return true;
+        }
+
+        java.util.List<String> playersWithSameIp = playerManager.getPlayersByIp(targetIp);
+        playersWithSameIp.remove(playerName);
+
+        StringBuilder response = new StringBuilder();
+        response.append("§6Сканируем по нику: ").append(playerName).append("\n");
+        response.append("§7");
+
+        if (playersWithSameIp.isEmpty()) {
+            response.append("Нет других аккаунтов с этим IP");
+        } else {
+            response.append(String.join(", ", playersWithSameIp));
+        }
+
+        sender.sendMessage(response.toString());
+        commandLogger.logCommand(sender.getName(), "dupeip " + playerName);
+        return true;
+    }
+}
