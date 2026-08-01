@@ -130,30 +130,17 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        if (messageText.startsWith("!rcon ")) {
-            handleRconCommand(chatId, messageText.substring(6).trim(), userId);
+        if (messageText.startsWith("!rcon global ")) {
+            handleRconCommand(chatId, messageText.substring(13).trim(), userId);
             return;
         }
 
         if (messageText.startsWith("!")) {
-            sendMessage(chatId, "[БОТ] Неизвестная команда. Доступные команды: !id, !rcon ...");
+            sendMessage(chatId, "[БОТ] Неизвестная команда. Доступные команды: !id, !rcon global ...");
         }
     }
 
-    private void handleRconCommand(long chatId, String command, long userId) {
-        String[] parts = command.split(" ");
-        if (parts.length == 0) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global <команда>");
-            return;
-        }
-
-        String server = parts[0].toLowerCase();
-        if (!server.equals("global")) {
-            sendMessage(chatId, "[БОТ] Доступен только сервер global");
-            return;
-        }
-
-        String cmd = command.substring(7).trim();
+    private void handleRconCommand(long chatId, String cmd, long userId) {
         if (cmd.isEmpty()) {
             sendMessage(chatId, "[БОТ] Использование: !rcon global <команда>");
             return;
@@ -216,6 +203,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
+        // ===== ВСЕ ОСТАЛЬНЫЕ КОМАНДЫ =====
         executeServerCommand(chatId, cmd, userId);
     }
 
@@ -223,7 +211,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleLogs(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon logs <ник> [кол-во]");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global logs <ник> [кол-во]");
             return;
         }
         
@@ -235,45 +223,15 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             if (limit > 50) limit = 50;
         }
 
-        List<CommandLogger.LogEntry> logs = commandLogger.getLogs(playerName, 30);
-        if (logs.isEmpty()) {
-            sendMessage(chatId, "[БОТ] Нет логов для " + playerName);
-            return;
-        }
-
-        List<CommandLogger.LogEntry> recent = logs.stream()
-            .limit(limit)
-            .collect(Collectors.toList());
-
-        SimpleDateFormat sdf = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
-        sdf.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
-
-        StringBuilder response = new StringBuilder();
-        response.append("[БОТ] Логи игрока ").append(playerName).append(" (последние ").append(recent.size()).append("):\n");
-        response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-
-        for (CommandLogger.LogEntry entry : recent) {
-            String time = entry.timestamp;
-            try {
-                SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                inputFormat.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
-                Date date = inputFormat.parse(entry.timestamp);
-                time = sdf.format(date);
-            } catch (Exception e) {}
-            response.append(time).append(" | ").append(entry.command).append("\n");
-        }
-
-        response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        response.append("Всего записей: ").append(logs.size());
-
-        sendMessage(chatId, response.toString());
+        String response = commandLogger.getFormattedLogs(playerName, limit);
+        sendMessage(chatId, response);
     }
 
-    // ===== SHIST (наказания, которые ВЫДАЛ игрок) =====
+    // ===== SHIST =====
     private void handleShist(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon shist <ник> [кол-во]");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global shist <ник> [кол-во]");
             return;
         }
         
@@ -285,81 +243,15 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             if (limit > 50) limit = 50;
         }
 
-        // Собираем все наказания, где issuer = issuerName
-        // Используем прямой доступ к history через рефлексию или через существующие методы
-        List<PunishmentManager.HistoryEntry> allHistory = new ArrayList<>();
-        
-        // Получаем все имена игроков из истории через существующий метод
-        // Вместо getHistoryKeys() используем прямой доступ к полю через рефлексию
-        // Или проще: проходим по всем игрокам, которых знает плагин
-        for (String player : punishmentManager.getBanList()) {
-            // Это не идеально, но работает
-        }
-        
-        // Альтернативный подход: собираем историю из всех известных игроков
-        // Используем существующие методы PunishmentManager
-        try {
-            // Пытаемся получить историю для всех игроков через рефлексию
-            java.lang.reflect.Field historyField = PunishmentManager.class.getDeclaredField("history");
-            historyField.setAccessible(true);
-            Map<String, List<PunishmentManager.HistoryEntry>> historyMap = 
-                (Map<String, List<PunishmentManager.HistoryEntry>>) historyField.get(punishmentManager);
-            
-            for (Map.Entry<String, List<PunishmentManager.HistoryEntry>> entry : historyMap.entrySet()) {
-                for (PunishmentManager.HistoryEntry he : entry.getValue()) {
-                    if (he.issuer.equalsIgnoreCase(issuerName)) {
-                        allHistory.add(he);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // Если рефлексия не сработала, используем запасной вариант
-            sendMessage(chatId, "[БОТ] Ошибка получения истории: " + e.getMessage());
-            return;
-        }
-
-        // Сортируем по времени (сначала новые)
-        allHistory.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
-
-        if (allHistory.isEmpty()) {
-            sendMessage(chatId, "[БОТ] " + issuerName + " не выдавал наказаний");
-            return;
-        }
-
-        List<PunishmentManager.HistoryEntry> recent = allHistory.stream()
-            .limit(limit)
-            .collect(Collectors.toList());
-
-        SimpleDateFormat sdf = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
-        sdf.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
-
-        StringBuilder response = new StringBuilder();
-        response.append("[БОТ] Наказания, выданные ").append(issuerName).append(" (последние ").append(recent.size()).append("):\n");
-        response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-
-        for (PunishmentManager.HistoryEntry entry : recent) {
-            String time = sdf.format(new Date(entry.timestamp));
-            String status = entry.type.equals("ban") ? "[БАН]" : 
-                           entry.type.equals("mute") ? "[МУТ]" : 
-                           entry.type.equals("kick") ? "[КИК]" : 
-                           entry.type.equals("unban") ? "[РАЗБАН]" : "[РАЗМУТ]";
-            response.append(time).append(" | ").append(status)
-                    .append(" ").append(entry.player)
-                    .append(" на ").append(entry.duration)
-                    .append(": ").append(entry.reason).append("\n");
-        }
-
-        response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        response.append("Всего наказаний: ").append(allHistory.size());
-
-        sendMessage(chatId, response.toString());
+        String response = punishmentManager.getFormattedShist(issuerName, limit);
+        sendMessage(chatId, response);
     }
 
-    // ===== HIST (наказания, которые ПОЛУЧИЛ игрок) =====
+    // ===== HIST =====
     private void handleHist(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon hist <ник> [кол-во]");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global hist <ник> [кол-во]");
             return;
         }
         
@@ -371,59 +263,19 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             if (limit > 50) limit = 50;
         }
 
-        List<PunishmentManager.HistoryEntry> history = punishmentManager.getHistory(playerName);
-        if (history.isEmpty()) {
-            sendMessage(chatId, "[БОТ] Нет наказаний для " + playerName);
-            return;
-        }
-
-        // Сортируем по времени (сначала новые)
-        history.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
-
-        List<PunishmentManager.HistoryEntry> recent = history.stream()
-            .limit(limit)
-            .collect(Collectors.toList());
-
-        SimpleDateFormat sdf = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
-        sdf.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
-
-        StringBuilder response = new StringBuilder();
-        response.append("[БОТ] Наказания игрока ").append(playerName).append(" (последние ").append(recent.size()).append("):\n");
-        response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-
-        for (PunishmentManager.HistoryEntry entry : recent) {
-            String time = sdf.format(new Date(entry.timestamp));
-            String status = entry.type.equals("ban") ? "[БАН]" : 
-                           entry.type.equals("mute") ? "[МУТ]" : 
-                           entry.type.equals("kick") ? "[КИК]" : 
-                           entry.type.equals("unban") ? "[РАЗБАН]" : "[РАЗМУТ]";
-            String active = "";
-            if (entry.type.equals("ban") && punishmentManager.isBanned(playerName)) active = " [АКТИВЕН]";
-            if (entry.type.equals("mute") && punishmentManager.isMuted(playerName)) active = " [АКТИВЕН]";
-            
-            response.append(time).append(" | ").append(status)
-                    .append(" ").append(entry.issuer)
-                    .append(" на ").append(entry.duration)
-                    .append(": ").append(entry.reason).append(active).append("\n");
-        }
-
-        response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        response.append("Всего наказаний: ").append(history.size());
-
-        sendMessage(chatId, response.toString());
+        String response = punishmentManager.getFormattedHistory(playerName, limit);
+        sendMessage(chatId, response);
     }
 
     // ===== DUPEIP =====
     private void handleDupeip(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon dupeip <ник>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global dupeip <ник>");
             return;
         }
         
         String playerName = parts[1];
-        
-        // Получаем IP игрока через PlayerManager
         String targetIp = playerManager.getPlayerIp(playerName);
         
         if (targetIp == null || targetIp.equals("—") || targetIp.equals("0.0.0.0")) {
@@ -431,10 +283,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        // Ищем всех игроков с этим IP через PlayerManager
         List<String> playersWithSameIp = playerManager.getPlayersByIp(targetIp);
-        
-        // Убираем самого игрока из списка (если он там есть)
         playersWithSameIp.remove(playerName);
 
         StringBuilder response = new StringBuilder();
@@ -449,11 +298,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, response.toString());
     }
 
-    // ===== PEX USER (ТОЛЬКО ЧЕРЕЗ БОТА) =====
+    // ===== PEX USER =====
     private void handlePexUser(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 3) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon pex user <ник>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global pex user <ник>");
             return;
         }
         
