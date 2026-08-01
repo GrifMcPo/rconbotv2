@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot; 
+package com.grifmcpo.consolebot;
  
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -74,7 +74,7 @@ public class PunishmentManager implements Listener {
             }
             history.put(playerName, list);
         }
-        plugin.getLogger().info("Загружена история наказаний");
+        plugin.getLogger().info("Загружена история наказаний: " + history.size() + " игроков");
     }
 
     private void loadActivePunishments() {
@@ -195,25 +195,6 @@ public class PunishmentManager implements Listener {
         } catch (Exception e) {
             plugin.getLogger().severe("Ошибка сохранения history.yml: " + e.getMessage());
         }
-    }
-
-    // ============================================
-    // ==== НОВЫЙ МЕТОД ДЛЯ ПОЛУЧЕНИЯ ВСЕХ КЛЮЧЕЙ ИСТОРИИ =====
-    // ============================================
-    public Set<String> getHistoryKeys() {
-        return history.keySet();
-    }
-
-    // ============================================
-    // ==== МЕТОДЫ ДЛЯ СОХРАНЕНИЯ/ПОЛУЧЕНИЯ IP =====
-    // ============================================
-    public void savePlayerIp(String playerName, String ip) {
-        historyConfig.set(playerName + ".lastIp", ip);
-        saveHistory();
-    }
-
-    public String getPlayerIp(String playerName) {
-        return historyConfig.getString(playerName + ".lastIp", "—");
     }
 
     // ============================================
@@ -478,7 +459,6 @@ public class PunishmentManager implements Listener {
         Player player = event.getPlayer();
         String playerName = player.getName();
 
-        // Сохраняем IP при входе
         if (player.getAddress() != null) {
             savePlayerIp(playerName, player.getAddress().getHostString());
         }
@@ -523,6 +503,19 @@ public class PunishmentManager implements Listener {
     // ============================================
     // ==== GETTERS =====
     // ============================================
+
+    public Set<String> getHistoryKeys() {
+        return history.keySet();
+    }
+
+    public void savePlayerIp(String playerName, String ip) {
+        historyConfig.set(playerName + ".lastIp", ip);
+        saveHistory();
+    }
+
+    public String getPlayerIp(String playerName) {
+        return historyConfig.getString(playerName + ".lastIp", "—");
+    }
 
     public HistoryEntry getLastBan(String playerName) {
         List<HistoryEntry> list = history.get(playerName);
@@ -694,6 +687,120 @@ public class PunishmentManager implements Listener {
     }
 
     // ============================================
+    // ==== КРАСИВЫЙ ВЫВОД ИСТОРИИ =====
+    // ============================================
+
+    public String getFormattedHistory(String playerName, int limit) {
+        List<HistoryEntry> historyList = getHistory(playerName);
+        if (historyList.isEmpty()) {
+            return "[БОТ] Нет наказаний для " + playerName;
+        }
+
+        historyList.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
+
+        List<HistoryEntry> recent = historyList.stream()
+            .limit(limit > 0 ? limit : historyList.size())
+            .collect(Collectors.toList());
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("[БОТ] Ответ сервера:\n");
+        sb.append("История нарушений игрока ").append(playerName)
+          .append(" (Записей: ").append(historyList.size()).append(")\n");
+
+        for (HistoryEntry entry : recent) {
+            String timeAgo = getTimeAgo(entry.timestamp);
+            String status = "";
+            if (entry.type.equals("ban")) {
+                status = isBanned(playerName) ? " [Активен]" : " [Истек]";
+            } else if (entry.type.equals("mute")) {
+                status = isMuted(playerName) ? " [Активен]" : " [Истек]";
+            }
+
+            String actionName = "";
+            switch (entry.type) {
+                case "ban": actionName = "забанен"; break;
+                case "mute": actionName = "замучен"; break;
+                case "kick": actionName = "кикнут"; break;
+                case "unban": actionName = "разбанен"; break;
+                case "unmute": actionName = "размучен"; break;
+                default: actionName = entry.type;
+            }
+
+            sb.append(" - ").append(timeAgo).append(" -\n");
+            sb.append(" ").append(playerName).append(" был ").append(actionName)
+              .append(" на ").append(entry.duration).append(" ")
+              .append(entry.issuer).append(": ").append(entry.reason)
+              .append(" (глобальный)").append(status).append("\n");
+        }
+
+        return sb.toString();
+    }
+
+    public String getFormattedShist(String issuerName, int limit) {
+        List<HistoryEntry> allHistory = new ArrayList<>();
+
+        try {
+            java.lang.reflect.Field historyField = PunishmentManager.class.getDeclaredField("history");
+            historyField.setAccessible(true);
+            Map<String, List<HistoryEntry>> historyMap = 
+                (Map<String, List<HistoryEntry>>) historyField.get(this);
+            
+            for (Map.Entry<String, List<HistoryEntry>> entry : historyMap.entrySet()) {
+                for (HistoryEntry he : entry.getValue()) {
+                    if (he.issuer.equalsIgnoreCase(issuerName)) {
+                        allHistory.add(he);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            return "[БОТ] Ошибка получения истории: " + e.getMessage();
+        }
+
+        if (allHistory.isEmpty()) {
+            return "[БОТ] " + issuerName + " не выдавал наказаний";
+        }
+
+        allHistory.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
+
+        List<HistoryEntry> recent = allHistory.stream()
+            .limit(limit > 0 ? limit : allHistory.size())
+            .collect(Collectors.toList());
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("[БОТ] Ответ сервера:\n");
+        sb.append("История наказаний игроком ").append(issuerName)
+          .append(" (Записей: ").append(allHistory.size()).append(")\n");
+
+        for (HistoryEntry entry : recent) {
+            String timeAgo = getTimeAgo(entry.timestamp);
+            String status = "";
+            if (entry.type.equals("ban")) {
+                status = isBanned(entry.player) ? " [Активен]" : " [Истек]";
+            } else if (entry.type.equals("mute")) {
+                status = isMuted(entry.player) ? " [Активен]" : " [Истек]";
+            }
+
+            String actionName = "";
+            switch (entry.type) {
+                case "ban": actionName = "забанен"; break;
+                case "mute": actionName = "замучен"; break;
+                case "kick": actionName = "кикнут"; break;
+                case "unban": actionName = "разбанен"; break;
+                case "unmute": actionName = "размучен"; break;
+                default: actionName = entry.type;
+            }
+
+            sb.append(" - ").append(timeAgo).append(" -\n");
+            sb.append(" ").append(entry.player).append(" был ").append(actionName)
+              .append(" на ").append(entry.duration).append(" ")
+              .append(entry.issuer).append(": ").append(entry.reason)
+              .append(" (глобальный)").append(status).append("\n");
+        }
+
+        return sb.toString();
+    }
+
+    // ============================================
     // ==== ВСПОМОГАТЕЛЬНЫЕ =====
     // ============================================
 
@@ -757,11 +864,29 @@ public class PunishmentManager implements Listener {
 
     public String getTimeAgo(long timestamp) {
         long diff = System.currentTimeMillis() - timestamp;
-        long days = diff / (24 * 60 * 60 * 1000);
-        long hours = (diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000);
-        if (days > 0) return days + "д " + hours + "ч назад";
-        if (hours > 0) return hours + "ч назад";
-        return "только что";
+        long seconds = diff / 1000;
+        long minutes = seconds / 60;
+        long hours = minutes / 60;
+        long days = hours / 24;
+        long months = days / 30;
+        long years = days / 365;
+
+        seconds %= 60;
+        minutes %= 60;
+        hours %= 24;
+        days %= 30;
+        months %= 12;
+
+        StringBuilder sb = new StringBuilder();
+        if (years > 0) sb.append(years).append(" лет ");
+        if (months > 0) sb.append(months).append(" месяцев ");
+        if (days > 0) sb.append(days).append(" дней ");
+        if (hours > 0) sb.append(hours).append(" часов ");
+        if (minutes > 0) sb.append(minutes).append(" минут ");
+        if (seconds > 0 && sb.length() == 0) sb.append(seconds).append(" секунд ");
+
+        if (sb.length() == 0) return "только что";
+        return sb.toString().trim() + " назад";
     }
 
     public String getFormattedDateTime(long timestamp) {
