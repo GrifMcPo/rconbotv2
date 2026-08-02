@@ -57,61 +57,16 @@ public class TelegramConsoleBot extends JavaPlugin {
         // ===== РЕГИСТРАЦИЯ КОМАНД ДЛЯ ИГРОКОВ =====
         PlayerCommands playerCommands = new PlayerCommands(this, punishmentManager, playerManager, commandLogger);
         
-        try {
-            getCommand("ban").setExecutor(playerCommands);
-            getLogger().info("Команда /ban зарегистрирована");
-        } catch (NullPointerException e) {
-            getLogger().warning("Команда /ban не найдена в plugin.yml");
-        }
-        
-        try {
-            getCommand("mute").setExecutor(playerCommands);
-            getLogger().info("Команда /mute зарегистрирована");
-        } catch (NullPointerException e) {
-            getLogger().warning("Команда /mute не найдена в plugin.yml");
-        }
-        
-        try {
-            getCommand("kick").setExecutor(playerCommands);
-            getLogger().info("Команда /kick зарегистрирована");
-        } catch (NullPointerException e) {
-            getLogger().warning("Команда /kick не найдена в plugin.yml");
-        }
-        
-        try {
-            getCommand("bc").setExecutor(playerCommands);
-            getLogger().info("Команда /bc зарегистрирована");
-        } catch (NullPointerException e) {
-            getLogger().warning("Команда /bc не найдена в plugin.yml");
-        }
-        
-        try {
-            getCommand("logs").setExecutor(playerCommands);
-            getLogger().info("Команда /logs зарегистрирована");
-        } catch (NullPointerException e) {
-            getLogger().warning("Команда /logs не найдена в plugin.yml");
-        }
-        
-        try {
-            getCommand("hist").setExecutor(playerCommands);
-            getLogger().info("Команда /hist зарегистрирована");
-        } catch (NullPointerException e) {
-            getLogger().warning("Команда /hist не найдена в plugin.yml");
-        }
-        
-        try {
-            getCommand("shist").setExecutor(playerCommands);
-            getLogger().info("Команда /shist зарегистрирована");
-        } catch (NullPointerException e) {
-            getLogger().warning("Команда /shist не найдена в plugin.yml");
-        }
-        
-        try {
-            getCommand("dupeip").setExecutor(playerCommands);
-            getLogger().info("Команда /dupeip зарегистрирована");
-        } catch (NullPointerException e) {
-            getLogger().warning("Команда /dupeip не найдена в plugin.yml");
-        }
+        try { getCommand("ban").setExecutor(playerCommands); } catch (NullPointerException e) {}
+        try { getCommand("mute").setExecutor(playerCommands); } catch (NullPointerException e) {}
+        try { getCommand("kick").setExecutor(playerCommands); } catch (NullPointerException e) {}
+        try { getCommand("bc").setExecutor(playerCommands); } catch (NullPointerException e) {}
+        try { getCommand("logs").setExecutor(playerCommands); } catch (NullPointerException e) {}
+        try { getCommand("hist").setExecutor(playerCommands); } catch (NullPointerException e) {}
+        try { getCommand("shist").setExecutor(playerCommands); } catch (NullPointerException e) {}
+        try { getCommand("dupeip").setExecutor(playerCommands); } catch (NullPointerException e) {}
+        try { getCommand("banip").setExecutor(playerCommands); } catch (NullPointerException e) {}
+        try { getCommand("unbanip").setExecutor(playerCommands); } catch (NullPointerException e) {}
         
         getLogger().info("Все команды для игроков зарегистрированы!");
 
