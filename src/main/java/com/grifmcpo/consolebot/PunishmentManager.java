@@ -211,10 +211,6 @@ public class PunishmentManager implements Listener {
         }
     }
 
-    // ============================================
-    // ==== ВСПОМОГАТЕЛЬНЫЙ МЕТОД ДЛЯ ДОБАВЛЕНИЯ В ИСТОРИЮ =====
-    // ============================================
-    
     private void addHistorySync(String playerName, HistoryEntry entry) {
         List<HistoryEntry> list = history.computeIfAbsent(playerName, k -> new ArrayList<>());
         list.add(entry);
