@@ -3,7 +3,7 @@ package com.grifmcpo.consolebot;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender; 
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -15,13 +15,16 @@ public class PlayerCommands implements CommandExecutor {
     private final PunishmentManager punishmentManager;
     private final PlayerManager playerManager;
     private final CommandLogger commandLogger;
+    private final AuthManager authManager;
 
     public PlayerCommands(JavaPlugin plugin, PunishmentManager punishmentManager, 
-                          PlayerManager playerManager, CommandLogger commandLogger) {
+                          PlayerManager playerManager, CommandLogger commandLogger,
+                          AuthManager authManager) {
         this.plugin = plugin;
         this.punishmentManager = punishmentManager;
         this.playerManager = playerManager;
         this.commandLogger = commandLogger;
+        this.authManager = authManager;
     }
 
     @Override
@@ -45,15 +48,38 @@ public class PlayerCommands implements CommandExecutor {
                 return handleShist(sender, args);
             case "dupeip":
                 return handleDupeip(sender, args);
-            case "banip":
-                return handleBanIp(sender, args);
-            case "unbanip":
-                return handleUnbanIp(sender, args);
+            case "tg":
+                return handleTg(sender, args);
             default:
                 return false;
         }
     }
 
+    // ===== TG =====
+    private boolean handleTg(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage("§cЭта команда только для игроков!");
+            return true;
+        }
+
+        Player player = (Player) sender;
+        String playerName = player.getName();
+
+        if (authManager.isLinked(playerName)) {
+            player.sendMessage("§cВаш аккаунт уже привязан к Telegram!");
+            return true;
+        }
+
+        String code = authManager.generateCode(playerName);
+        
+        player.sendMessage("§6📱 Ваш код для привязки Telegram: §e§l" + code);
+        player.sendMessage("§7Действителен 5 минут. Напишите боту: §f/привязать " + playerName + " " + code);
+        player.sendMessage("§7Бот: @" + plugin.getBotHandler().getBotUsername());
+        
+        return true;
+    }
+
+    // ===== BAN =====
     private boolean handleBan(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.ban")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -86,6 +112,7 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
+    // ===== MUTE =====
     private boolean handleMute(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.mute")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -118,6 +145,7 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
+    // ===== KICK =====
     private boolean handleKick(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.kick")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -149,6 +177,7 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
+    // ===== BROADCAST =====
     private boolean handleBroadcast(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.bc")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -169,6 +198,7 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
+    // ===== LOGS =====
     private boolean handleLogs(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.logs")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -192,6 +222,7 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
+    // ===== HIST =====
     private boolean handleHist(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.hist")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -215,6 +246,7 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
+    // ===== SHIST =====
     private boolean handleShist(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.shists")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -238,6 +270,7 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
+    // ===== DUPEIP =====
     private boolean handleDupeip(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.dupeip")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -272,65 +305,6 @@ public class PlayerCommands implements CommandExecutor {
 
         sender.sendMessage(response.toString());
         commandLogger.logCommand(sender.getName(), "dupeip " + playerName);
-        return true;
-    }
-
-    // ===== BANIP =====
-    private boolean handleBanIp(CommandSender sender, String[] args) {
-        if (!sender.hasPermission("telegramconsolebot.banip")) {
-            sender.sendMessage("§cУ вас нет прав на использование этой команды!");
-            return true;
-        }
-
-        if (args.length < 3) {
-            sender.sendMessage("§cИспользование: /banip <ник> <время> <причина> [-s]");
-            return true;
-        }
-
-        boolean hidden = false;
-        if (args[args.length - 1].equalsIgnoreCase("-s")) {
-            hidden = true;
-            args = Arrays.copyOf(args, args.length - 1);
-        }
-
-        String playerName = args[0];
-        String duration = args[1];
-        String reason = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
-        String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
-
-        boolean success = punishmentManager.banIp(playerName, issuer, reason, duration, hidden);
-        if (success) {
-            sender.sendMessage("§aIP игрока " + playerName + " забанен на " + duration + " по причине: " + reason);
-            commandLogger.logCommand(sender.getName(), "banip " + playerName + " " + duration + " " + reason);
-        } else {
-            sender.sendMessage("§cНе удалось забанить IP " + playerName);
-        }
-        return true;
-    }
-
-    // ===== UNBANIP =====
-    private boolean handleUnbanIp(CommandSender sender, String[] args) {
-        if (!sender.hasPermission("telegramconsolebot.unbanip")) {
-            sender.sendMessage("§cУ вас нет прав на использование этой команды!");
-            return true;
-        }
-
-        if (args.length < 2) {
-            sender.sendMessage("§cИспользование: /unbanip <ник> <причина>");
-            return true;
-        }
-
-        String playerName = args[0];
-        String reason = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
-        String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
-
-        boolean success = punishmentManager.unbanIp(playerName, issuer, reason);
-        if (success) {
-            sender.sendMessage("§aIP игрока " + playerName + " разбанен по причине: " + reason);
-            commandLogger.logCommand(sender.getName(), "unbanip " + playerName + " " + reason);
-        } else {
-            sender.sendMessage("§cIP игрока " + playerName + " не забанен!");
-        }
         return true;
     }
 }
