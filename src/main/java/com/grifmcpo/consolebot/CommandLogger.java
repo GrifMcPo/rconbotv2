@@ -1,5 +1,8 @@
-package com.grifmcpo.consolebot; 
+package com.grifmcpo.consolebot;
 
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.*;
@@ -8,7 +11,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class CommandLogger {
+public class CommandLogger implements Listener {
 
     private final JavaPlugin plugin;
     private final List<LogEntry> logCache = new ArrayList<>();
@@ -21,6 +24,14 @@ public class CommandLogger {
         dateFormat.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
         fileDateFormat.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
         loadLogs();
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+    }
+
+    @EventHandler
+    public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
+        String playerName = event.getPlayer().getName();
+        String command = event.getMessage();
+        logCommand(playerName, command);
     }
 
     public void logCommand(String playerName, String command) {
@@ -94,9 +105,7 @@ public class CommandLogger {
             return "[БОТ] Нет логов для " + playerName;
         }
 
-        List<LogEntry> recent = logs.stream()
-            .limit(limit > 0 ? limit : 10)
-            .collect(Collectors.toList());
+        List<LogEntry> recent = logs.stream().limit(limit).collect(Collectors.toList());
 
         SimpleDateFormat sdf = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
         sdf.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
