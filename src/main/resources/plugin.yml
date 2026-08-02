@@ -8,15 +8,15 @@ description: Telegram Console Bot with punishment system
 commands:
   ban:
     description: Забанить игрока
-    usage: /ban <ник> <время> <причина>
+    usage: /ban <ник> <время> <причина> [-s]
     permission: telegramconsolebot.ban
   mute:
     description: Замутить игрока
-    usage: /mute <ник> <время> <причина>
+    usage: /mute <ник> <время> <причина> [-s]
     permission: telegramconsolebot.mute
   kick:
     description: Кикнуть игрока
-    usage: /kick <ник> <причина>
+    usage: /kick <ник> <причина> [-s]
     permission: telegramconsolebot.kick
   bc:
     description: Объявление в чат
@@ -38,6 +38,14 @@ commands:
     description: Поиск аккаунтов по IP
     usage: /dupeip <ник>
     permission: telegramconsolebot.dupeip
+  banip:
+    description: Забанить IP игрока
+    usage: /banip <ник> <время> <причина> [-s]
+    permission: telegramconsolebot.banip
+  unbanip:
+    description: Разбанить IP игрока
+    usage: /unbanip <ник> <причина>
+    permission: telegramconsolebot.unbanip
 
 permissions:
   telegramconsolebot.ban:
@@ -55,4 +63,8 @@ permissions:
   telegramconsolebot.shists:
     default: op
   telegramconsolebot.dupeip:
+    default: op
+  telegramconsolebot.banip:
+    default: op
+  telegramconsolebot.unbanip:
     default: op
