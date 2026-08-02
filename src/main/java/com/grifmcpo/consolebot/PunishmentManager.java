@@ -64,7 +64,7 @@ public class PunishmentManager implements Listener {
 
         history.clear();
         for (String playerName : historyConfig.getKeys(false)) {
-            List<Map<?, ?>> entries = (List<Map<?,>>) historyConfig.getList(playerName);
+            List<Map<?, ?>> entries = (List<Map<?, ?>>) historyConfig.getList(playerName);
             if (entries == null) continue;
             List<HistoryEntry> list = new ArrayList<>();
             for (Map<?, ?> entry : entries) {
@@ -553,12 +553,13 @@ public class PunishmentManager implements Listener {
             // Кикаем всех игроков с этим IP
             for (Player p : Bukkit.getOnlinePlayers()) {
                 if (p.getAddress() != null && finalIp.equals(p.getAddress().getHostString())) {
+                    String expiryStr = expiry == -1 ? "навсегда" : formatTimeLeft(expiry);
                     String kickMessage = "§c§lВаш IP заблокирован!\n" +
                             "\n" +
                             "§fПричина: §c" + finalReason + "\n" +
                             "§fСервер: §cглобальный\n" +
                             "§fВыдал: §9" + finalIssuer + "\n" +
-                            "§fИстекает через: §c" + (expiry == -1 ? "навсегда" : formatTimeLeft(expiry));
+                            "§fИстекает через: §c" + expiryStr;
                     p.kickPlayer(kickMessage);
                 }
             }
