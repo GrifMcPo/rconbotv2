@@ -205,6 +205,16 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
+        if (cmd.startsWith("banip ")) {
+            handleBanIp(chatId, cmd, userId);
+            return;
+        }
+
+        if (cmd.startsWith("unbanip ")) {
+            handleUnbanIp(chatId, cmd, userId);
+            return;
+        }
+
         if (cmd.startsWith("ban ") || cmd.startsWith("mute ") ||
                 cmd.startsWith("kick ") || cmd.startsWith("unban ") || cmd.startsWith("unmute ")) {
             handlePunishment(chatId, cmd, userId);
@@ -507,7 +517,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
 
         sendMessage(chatId, result);
-        // STAFF УВЕДОМЛЕНИЕ УБРАНО НАВСЕГДА
     }
 
     // ===== CHECKBAN =====
@@ -579,6 +588,58 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         response += " IP: нет, скрыто: " + isHidden + ", навсегда: " + isPermanent;
 
         sendMessage(chatId, response);
+    }
+
+    // ===== BANIP =====
+    private void handleBanIp(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 4) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global banip <ник> <время> <причина> [-s]");
+            return;
+        }
+
+        boolean hidden = false;
+        String lastArg = parts[parts.length - 1];
+        if (lastArg.equalsIgnoreCase("-s")) {
+            hidden = true;
+            parts = Arrays.copyOf(parts, parts.length - 1);
+        }
+
+        String playerName = parts[1];
+        String duration = parts[2];
+        String reason = String.join(" ", Arrays.copyOfRange(parts, 3, parts.length));
+        String issuer = plugin.getCustomSender(userId);
+        if (issuer == null) issuer = "RCON@" + userId;
+
+        boolean success = punishmentManager.banIp(playerName, issuer, reason, duration, hidden);
+        if (success) {
+            String coloredReason = reason.replace('&', '§');
+            sendMessage(chatId, "[БОТ] IP игрока " + playerName + " забанен на " + duration + " по причине: " + coloredReason);
+        } else {
+            sendMessage(chatId, "[БОТ] Не удалось забанить IP " + playerName);
+        }
+    }
+
+    // ===== UNBANIP =====
+    private void handleUnbanIp(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 3) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global unbanip <ник> <причина>");
+            return;
+        }
+
+        String playerName = parts[1];
+        String reason = String.join(" ", Arrays.copyOfRange(parts, 2, parts.length));
+        String issuer = plugin.getCustomSender(userId);
+        if (issuer == null) issuer = "RCON@" + userId;
+
+        boolean success = punishmentManager.unbanIp(playerName, issuer, reason);
+        if (success) {
+            String coloredReason = reason.replace('&', '§');
+            sendMessage(chatId, "[БОТ] IP игрока " + playerName + " разбанен по причине: " + coloredReason);
+        } else {
+            sendMessage(chatId, "[БОТ] IP игрока " + playerName + " не забанен!");
+        }
     }
 
     // ===== BANLIST =====
