@@ -2,7 +2,7 @@ package com.grifmcpo.consolebot;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
-import org.bukkit.plugin.java.JavaPlugin; 
+import org.bukkit.plugin.java.JavaPlugin;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
@@ -25,7 +25,9 @@ public class TelegramConsoleBot extends JavaPlugin {
     private AdminLogger adminLogger;
     private BotBanManager botBanManager;
     private GroupManager groupManager;
+    private AuthManager authManager;
     private TelegramBotHandler botHandler;
+    private AuthListener authListener;
 
     @Override
     public void onEnable() {
@@ -48,38 +50,43 @@ public class TelegramConsoleBot extends JavaPlugin {
         punishmentManager = new PunishmentManager(this, adminLogger);
         botBanManager = new BotBanManager(this);
         groupManager = new GroupManager(this);
+        authManager = new AuthManager(this);
 
-        // Регистрация чат-листенера для блокировки мута
         Bukkit.getPluginManager().registerEvents(punishmentManager, this);
-        // Регистрация логгера команд
         Bukkit.getPluginManager().registerEvents(commandLogger, this);
 
-        // ===== РЕГИСТРАЦИЯ КОМАНД ДЛЯ ИГРОКОВ =====
-        PlayerCommands playerCommands = new PlayerCommands(this, punishmentManager, playerManager, commandLogger);
+        PlayerCommands playerCommands = new PlayerCommands(this, punishmentManager, playerManager, commandLogger, authManager);
         
-        try { getCommand("ban").setExecutor(playerCommands); } catch (NullPointerException e) {}
-        try { getCommand("mute").setExecutor(playerCommands); } catch (NullPointerException e) {}
-        try { getCommand("kick").setExecutor(playerCommands); } catch (NullPointerException e) {}
-        try { getCommand("bc").setExecutor(playerCommands); } catch (NullPointerException e) {}
-        try { getCommand("logs").setExecutor(playerCommands); } catch (NullPointerException e) {}
-        try { getCommand("hist").setExecutor(playerCommands); } catch (NullPointerException e) {}
-        try { getCommand("shist").setExecutor(playerCommands); } catch (NullPointerException e) {}
-        try { getCommand("dupeip").setExecutor(playerCommands); } catch (NullPointerException e) {}
-        try { getCommand("banip").setExecutor(playerCommands); } catch (NullPointerException e) {}
-        try { getCommand("unbanip").setExecutor(playerCommands); } catch (NullPointerException e) {}
-        
-        getLogger().info("Все команды для игроков зарегистрированы!");
+        try {
+            getCommand("ban").setExecutor(playerCommands);
+            getCommand("mute").setExecutor(playerCommands);
+            getCommand("kick").setExecutor(playerCommands);
+            getCommand("bc").setExecutor(playerCommands);
+            getCommand("logs").setExecutor(playerCommands);
+            getCommand("hist").setExecutor(playerCommands);
+            getCommand("shist").setExecutor(playerCommands);
+            getCommand("dupeip").setExecutor(playerCommands);
+            getCommand("tg").setExecutor(playerCommands);
+            getLogger().info("Все команды для игроков зарегистрированы!");
+        } catch (NullPointerException e) {
+            getLogger().warning("Некоторые команды не найдены в plugin.yml");
+        }
 
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
             botHandler = new TelegramBotHandler(token, this, playerManager, commandLogger, logsCommand,
-                    commandExecutor, punishmentManager, botBanManager, groupManager);
+                    commandExecutor, punishmentManager, botBanManager, groupManager, authManager);
             botsApi.registerBot(botHandler);
             getLogger().info("Telegram-бот успешно зарегистрирован!");
         } catch (TelegramApiException e) {
             getLogger().severe("Ошибка при регистрации бота: " + e.getMessage());
             e.printStackTrace();
         }
+
+        authListener = new AuthListener(this, authManager, botHandler);
+        Bukkit.getPluginManager().registerEvents(authListener, this);
+        authListener.startSessionChecker();
+        getLogger().info("Система привязки Telegram запущена!");
     }
 
     @Override
@@ -130,9 +137,6 @@ public class TelegramConsoleBot extends JavaPlugin {
         }
     }
 
-    // ============================================
-    // ==== МЕТОДЫ ДЛЯ РАБОТЫ С IP =====
-    // ============================================
     public String getPlayerIp(String playerName) {
         return playerManager.getPlayerIp(playerName);
     }
@@ -141,9 +145,6 @@ public class TelegramConsoleBot extends JavaPlugin {
         return playerManager.getPlayersByIp(ip);
     }
 
-    // ============================================
-    // ==== GETTERS / SETTERS =====
-    // ============================================
     public Map<String, String> getAdmins() { return admins; }
     public long getOwnerId() { return ownerId; }
     public void addAdmin(String telegramId, String playerName) { admins.put(telegramId, playerName); saveAdmins(); }
@@ -158,4 +159,5 @@ public class TelegramConsoleBot extends JavaPlugin {
     public BotBanManager getBotBanManager() { return botBanManager; }
     public GroupManager getGroupManager() { return groupManager; }
     public TelegramBotHandler getBotHandler() { return botHandler; }
+    public AuthManager getAuthManager() { return authManager; }
 }
