@@ -42,6 +42,11 @@ commands:
     description: Получить код для привязки Telegram
     usage: /tg
     permission: telegramconsolebot.tg
+  untgm:
+    description: Отвязать аккаунт от Telegram
+    usage: /untgm <ник>
+    permission: telegramconsolebot.unlink
+    aliases: [unlinktg]
 
 permissions:
   telegramconsolebot.ban:
@@ -62,3 +67,5 @@ permissions:
     default: op
   telegramconsolebot.tg:
     default: true
+  telegramconsolebot.unlink:
+    default: op
