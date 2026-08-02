@@ -155,7 +155,6 @@ public class PunishmentManager implements Listener {
                 banIssuers.remove(playerName);
                 banReasons.remove(playerName);
                 plugin.getLogger().info("Автоснятие бана: " + playerName);
-                // Убрали broadcast сообщение
             }
         }
 
@@ -243,9 +242,7 @@ public class PunishmentManager implements Listener {
             }
 
             if (finalBroadcast && !finalHidden) {
-                String timeStr = finalDuration.equals("навсегда") ? "" : " §fна §b" + formatDuration(finalDuration) + " §f";
-                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fзабанил §c" + finalPlayerName + 
-                             timeStr + "§fпо причине: §7" + finalReason + " (глобальный)";
+                String msg = buildChatMessage("забанил", finalPlayerName, finalIssuer, finalReason, finalDuration);
                 Bukkit.broadcastMessage(msg);
             }
 
@@ -291,8 +288,7 @@ public class PunishmentManager implements Listener {
             saveHistory();
 
             if (finalBroadcast) {
-                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fразбанил §c" + finalPlayerName + 
-                             " §fпо причине: §7" + finalReason + " (глобальный)";
+                String msg = buildChatMessage("разбанил", finalPlayerName, finalIssuer, finalReason, null);
                 Bukkit.broadcastMessage(msg);
             }
 
@@ -352,9 +348,7 @@ public class PunishmentManager implements Listener {
             }
 
             if (finalBroadcast && !finalHidden) {
-                String timeStr = finalDuration.equals("навсегда") ? "" : " §fна §b" + formatDuration(finalDuration) + " §f";
-                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fзамутил §c" + finalPlayerName + 
-                             timeStr + "§fпо причине: §7" + finalReason + " (глобальный)";
+                String msg = buildChatMessage("замутил", finalPlayerName, finalIssuer, finalReason, finalDuration);
                 Bukkit.broadcastMessage(msg);
             }
 
@@ -400,8 +394,7 @@ public class PunishmentManager implements Listener {
             saveHistory();
 
             if (finalBroadcast) {
-                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fразмутил §c" + finalPlayerName + 
-                             " §fпо причине: §7" + finalReason + " (глобальный)";
+                String msg = buildChatMessage("размутил", finalPlayerName, finalIssuer, finalReason, null);
                 Bukkit.broadcastMessage(msg);
             }
 
@@ -453,8 +446,7 @@ public class PunishmentManager implements Listener {
             player.kickPlayer("§cВы были кикнуты!\n§7Причина: " + finalReason);
 
             if (finalBroadcast && !finalHidden) {
-                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fкикнул §c" + finalPlayerName + 
-                             " §fпо причине: §7" + finalReason + " (глобальный)";
+                String msg = buildChatMessage("кикнул", finalPlayerName, finalIssuer, finalReason, null);
                 Bukkit.broadcastMessage(msg);
             }
 
@@ -468,6 +460,17 @@ public class PunishmentManager implements Listener {
 
     public boolean kickPlayer(String playerName, String issuer, String reason) {
         return kickPlayer(playerName, issuer, reason, false, true);
+    }
+
+    // ============================================
+    // ==== КРАСИВОЕ СООБЩЕНИЕ В ЧАТ =====
+    // ============================================
+    private String buildChatMessage(String action, String target, String issuer, String reason, String duration) {
+        String coloredReason = reason.replace('&', '§');
+        String durationStr = (duration != null && !duration.equals("навсегда")) ? " §fна §b" + formatDuration(duration) + " §f" : " §f";
+
+        String msg = "§c§l(! ) §fИгрок §9" + issuer + " §f" + action + " §c" + target + durationStr + "§fпо причине: " + coloredReason + " §7(глобальный)";
+        return msg;
     }
 
     // ============================================
@@ -738,12 +741,7 @@ public class PunishmentManager implements Listener {
 
         historyList.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
 
-        List<HistoryEntry> recent;
-        if (limit > 0) {
-            recent = historyList.stream().limit(limit).collect(Collectors.toList());
-        } else {
-            recent = new ArrayList<>(historyList);
-        }
+        List<HistoryEntry> recent = historyList.stream().limit(limit).collect(Collectors.toList());
 
         StringBuilder sb = new StringBuilder();
         sb.append("[БОТ] Ответ сервера:\n");
@@ -753,10 +751,14 @@ public class PunishmentManager implements Listener {
         for (HistoryEntry entry : recent) {
             String timeAgo = getTimeAgo(entry.timestamp);
             String status = "";
-            if (entry.type.equals("ban")) {
-                status = isBanned(playerName) ? " [Активен]" : " [Истек]";
-            } else if (entry.type.equals("mute")) {
-                status = isMuted(playerName) ? " [Активен]" : " [Истек]";
+            if (entry.type.equals("ban") && isBanned(playerName)) {
+                status = " [Активен]";
+            } else if (entry.type.equals("ban") && !isBanned(playerName)) {
+                status = " [Истек]";
+            } else if (entry.type.equals("mute") && isMuted(playerName)) {
+                status = " [Активен]";
+            } else if (entry.type.equals("mute") && !isMuted(playerName)) {
+                status = " [Истек]";
             }
 
             String actionName = "";
@@ -782,21 +784,12 @@ public class PunishmentManager implements Listener {
     public String getFormattedShist(String issuerName, int limit) {
         List<HistoryEntry> allHistory = new ArrayList<>();
 
-        try {
-            java.lang.reflect.Field historyField = PunishmentManager.class.getDeclaredField("history");
-            historyField.setAccessible(true);
-            Map<String, List<HistoryEntry>> historyMap = 
-                (Map<String, List<HistoryEntry>>) historyField.get(this);
-            
-            for (Map.Entry<String, List<HistoryEntry>> entry : historyMap.entrySet()) {
-                for (HistoryEntry he : entry.getValue()) {
-                    if (he.issuer.equalsIgnoreCase(issuerName)) {
-                        allHistory.add(he);
-                    }
+        for (Map.Entry<String, List<HistoryEntry>> entry : history.entrySet()) {
+            for (HistoryEntry he : entry.getValue()) {
+                if (he.issuer.equalsIgnoreCase(issuerName)) {
+                    allHistory.add(he);
                 }
             }
-        } catch (Exception e) {
-            return "[БОТ] Ошибка получения истории: " + e.getMessage();
         }
 
         if (allHistory.isEmpty()) {
@@ -805,12 +798,7 @@ public class PunishmentManager implements Listener {
 
         allHistory.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
 
-        List<HistoryEntry> recent;
-        if (limit > 0) {
-            recent = allHistory.stream().limit(limit).collect(Collectors.toList());
-        } else {
-            recent = new ArrayList<>(allHistory);
-        }
+        List<HistoryEntry> recent = allHistory.stream().limit(limit).collect(Collectors.toList());
 
         StringBuilder sb = new StringBuilder();
         sb.append("[БОТ] Ответ сервера:\n");
@@ -820,10 +808,14 @@ public class PunishmentManager implements Listener {
         for (HistoryEntry entry : recent) {
             String timeAgo = getTimeAgo(entry.timestamp);
             String status = "";
-            if (entry.type.equals("ban")) {
-                status = isBanned(entry.player) ? " [Активен]" : " [Истек]";
-            } else if (entry.type.equals("mute")) {
-                status = isMuted(entry.player) ? " [Активен]" : " [Истек]";
+            if (entry.type.equals("ban") && isBanned(entry.player)) {
+                status = " [Активен]";
+            } else if (entry.type.equals("ban") && !isBanned(entry.player)) {
+                status = " [Истек]";
+            } else if (entry.type.equals("mute") && isMuted(entry.player)) {
+                status = " [Активен]";
+            } else if (entry.type.equals("mute") && !isMuted(entry.player)) {
+                status = " [Истек]";
             }
 
             String actionName = "";
