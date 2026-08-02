@@ -11,13 +11,13 @@ import java.util.Arrays;
 
 public class PlayerCommands implements CommandExecutor {
 
-    private final JavaPlugin plugin;
+    private final TelegramConsoleBot plugin;
     private final PunishmentManager punishmentManager;
     private final PlayerManager playerManager;
     private final CommandLogger commandLogger;
     private final AuthManager authManager;
 
-    public PlayerCommands(JavaPlugin plugin, PunishmentManager punishmentManager, 
+    public PlayerCommands(TelegramConsoleBot plugin, PunishmentManager punishmentManager, 
                           PlayerManager playerManager, CommandLogger commandLogger,
                           AuthManager authManager) {
         this.plugin = plugin;
