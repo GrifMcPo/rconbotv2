@@ -52,9 +52,11 @@ public class TelegramConsoleBot extends JavaPlugin {
         groupManager = new GroupManager(this);
         authManager = new AuthManager(this);
 
+        // Регистрация событий
         Bukkit.getPluginManager().registerEvents(punishmentManager, this);
         Bukkit.getPluginManager().registerEvents(commandLogger, this);
 
+        // ===== РЕГИСТРАЦИЯ КОМАНД ДЛЯ ИГРОКОВ =====
         PlayerCommands playerCommands = new PlayerCommands(this, punishmentManager, playerManager, commandLogger, authManager);
         
         try {
@@ -72,6 +74,7 @@ public class TelegramConsoleBot extends JavaPlugin {
             getLogger().warning("Некоторые команды не найдены в plugin.yml");
         }
 
+        // ===== РЕГИСТРАЦИЯ TELEGRAM БОТА =====
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
             botHandler = new TelegramBotHandler(token, this, playerManager, commandLogger, logsCommand,
@@ -83,6 +86,7 @@ public class TelegramConsoleBot extends JavaPlugin {
             e.printStackTrace();
         }
 
+        // ===== РЕГИСТРАЦИЯ ЛИСТЕНЕРА АУТЕНТИФИКАЦИИ =====
         authListener = new AuthListener(this, authManager, botHandler);
         Bukkit.getPluginManager().registerEvents(authListener, this);
         authListener.startSessionChecker();
@@ -137,6 +141,9 @@ public class TelegramConsoleBot extends JavaPlugin {
         }
     }
 
+    // ============================================
+    // ==== МЕТОДЫ ДЛЯ IP =====
+    // ============================================
     public String getPlayerIp(String playerName) {
         return playerManager.getPlayerIp(playerName);
     }
@@ -145,6 +152,9 @@ public class TelegramConsoleBot extends JavaPlugin {
         return playerManager.getPlayersByIp(ip);
     }
 
+    // ============================================
+    // ==== GETTERS / SETTERS =====
+    // ============================================
     public Map<String, String> getAdmins() { return admins; }
     public long getOwnerId() { return ownerId; }
     public void addAdmin(String telegramId, String playerName) { admins.put(telegramId, playerName); saveAdmins(); }
