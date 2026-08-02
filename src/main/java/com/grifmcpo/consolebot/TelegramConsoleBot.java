@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot;   
+package com.grifmcpo.consolebot;  
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
@@ -52,7 +52,6 @@ public class TelegramConsoleBot extends JavaPlugin {
         groupManager = new GroupManager(this);
         authManager = new AuthManager(this);
 
-        // Регистрация событий
         Bukkit.getPluginManager().registerEvents(punishmentManager, this);
         Bukkit.getPluginManager().registerEvents(commandLogger, this);
 
@@ -91,6 +90,15 @@ public class TelegramConsoleBot extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(authListener, this);
         authListener.startSessionChecker();
         getLogger().info("Система привязки Telegram запущена!");
+
+        // ===== РЕГИСТРАЦИЯ КОМАНДЫ /untgm =====
+        UnlinkCommand unlinkCommand = new UnlinkCommand(this, botHandler);
+        try {
+            getCommand("untgm").setExecutor(unlinkCommand);
+            getLogger().info("Команда /untgm зарегистрирована!");
+        } catch (NullPointerException e) {
+            getLogger().warning("Команда /untgm не найдена в plugin.yml");
+        }
     }
 
     @Override
@@ -141,9 +149,6 @@ public class TelegramConsoleBot extends JavaPlugin {
         }
     }
 
-    // ============================================
-    // ==== МЕТОДЫ ДЛЯ IP =====
-    // ============================================
     public String getPlayerIp(String playerName) {
         return playerManager.getPlayerIp(playerName);
     }
@@ -152,9 +157,6 @@ public class TelegramConsoleBot extends JavaPlugin {
         return playerManager.getPlayersByIp(ip);
     }
 
-    // ============================================
-    // ==== GETTERS / SETTERS =====
-    // ============================================
     public Map<String, String> getAdmins() { return admins; }
     public long getOwnerId() { return ownerId; }
     public void addAdmin(String telegramId, String playerName) { admins.put(telegramId, playerName); saveAdmins(); }
