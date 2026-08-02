@@ -32,6 +32,11 @@ public class PunishmentManager implements Listener {
     private final Map<String, String> banIssuers = new ConcurrentHashMap<>();
     private final Map<String, String> banReasons = new ConcurrentHashMap<>();
 
+    // IP баны
+    private final Map<String, Long> ipBans = new ConcurrentHashMap<>();
+    private final Map<String, String> ipBanIssuers = new ConcurrentHashMap<>();
+    private final Map<String, String> ipBanReasons = new ConcurrentHashMap<>();
+
     private final List<String> allowedCommands = Arrays.asList("msg", "tell", "r", "reply", "help", "pay", "balance", "bal");
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
 
@@ -40,6 +45,7 @@ public class PunishmentManager implements Listener {
         this.adminLogger = adminLogger;
         loadHistory();
         loadActivePunishments();
+        loadIpBans();
         startExpiryChecker();
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
@@ -58,7 +64,7 @@ public class PunishmentManager implements Listener {
 
         history.clear();
         for (String playerName : historyConfig.getKeys(false)) {
-            List<Map<?, ?>> entries = (List<Map<?, ?>>) historyConfig.getList(playerName);
+            List<Map<?, ?>> entries = (List<Map<?,>>) historyConfig.getList(playerName);
             if (entries == null) continue;
             List<HistoryEntry> list = new ArrayList<>();
             for (Map<?, ?> entry : entries) {
@@ -135,6 +141,36 @@ public class PunishmentManager implements Listener {
         plugin.getLogger().info("Загружено активных банов: " + bans.size() + ", мутов: " + mutes.size());
     }
 
+    private void loadIpBans() {
+        ipBans.clear();
+        ipBanIssuers.clear();
+        ipBanReasons.clear();
+
+        for (Map.Entry<String, List<HistoryEntry>> entry : history.entrySet()) {
+            for (HistoryEntry he : entry.getValue()) {
+                if (he.type.equals("banip")) {
+                    String ip = he.player;
+                    boolean wasUnbanned = false;
+                    for (HistoryEntry he2 : entry.getValue()) {
+                        if (he2.type.equals("unbanip") && he2.player.equals(ip)) {
+                            wasUnbanned = true;
+                            break;
+                        }
+                    }
+                    if (!wasUnbanned) {
+                        long expiry = he.duration.equals("навсегда") ? -1 : he.timestamp + parseTimeToMillis(he.duration);
+                        if (expiry == -1 || expiry > System.currentTimeMillis()) {
+                            ipBans.put(ip, expiry);
+                            ipBanIssuers.put(ip, he.issuer);
+                            ipBanReasons.put(ip, he.reason);
+                        }
+                    }
+                }
+            }
+        }
+        plugin.getLogger().info("Загружено активных IP банов: " + ipBans.size());
+    }
+
     private void startExpiryChecker() {
         new BukkitRunnable() {
             @Override
@@ -170,6 +206,17 @@ public class PunishmentManager implements Listener {
                 if (p != null && p.isOnline()) {
                     p.sendMessage("Ваш мут был автоматически снят (срок истек)");
                 }
+            }
+        }
+
+        for (Map.Entry<String, Long> entry : new HashMap<>(ipBans).entrySet()) {
+            String ip = entry.getKey();
+            long expiry = entry.getValue();
+            if (expiry != -1 && expiry <= now) {
+                ipBans.remove(ip);
+                ipBanIssuers.remove(ip);
+                ipBanReasons.remove(ip);
+                plugin.getLogger().info("Автоснятие IP бана: " + ip);
             }
         }
     }
@@ -463,14 +510,145 @@ public class PunishmentManager implements Listener {
     }
 
     // ============================================
+    // ==== IP БАН =====
+    // ============================================
+    public boolean banIp(String playerName, String issuer, String reason, String duration) {
+        return banIp(playerName, issuer, reason, duration, false);
+    }
+
+    public boolean banIp(String playerName, String issuer, String reason, String duration, boolean hidden) {
+        String ip = getPlayerIp(playerName);
+        if (ip == null || ip.equals("—") || ip.equals("0.0.0.0")) {
+            return false;
+        }
+
+        if (isIpBanned(ip)) {
+            return false;
+        }
+
+        final String finalIp = ip;
+        final String finalPlayerName = playerName;
+        final String finalIssuer = issuer;
+        final String finalReason = reason;
+        final String finalDuration = duration;
+        final boolean finalHidden = hidden;
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            HistoryEntry entry = new HistoryEntry();
+            entry.type = "banip";
+            entry.player = finalPlayerName;
+            entry.issuer = finalIssuer;
+            entry.reason = finalReason;
+            entry.duration = finalDuration;
+            entry.timestamp = System.currentTimeMillis();
+            entry.hidden = finalHidden;
+            addHistorySync(finalPlayerName, entry);
+
+            long expiry = finalDuration.equals("навсегда") ? -1 : System.currentTimeMillis() + parseTimeToMillis(finalDuration);
+            ipBans.put(finalIp, expiry);
+            ipBanIssuers.put(finalIp, finalIssuer);
+            ipBanReasons.put(finalIp, finalReason);
+            saveHistory();
+
+            // Кикаем всех игроков с этим IP
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (p.getAddress() != null && finalIp.equals(p.getAddress().getHostString())) {
+                    String kickMessage = "§c§lВаш IP заблокирован!\n" +
+                            "\n" +
+                            "§fПричина: §c" + finalReason + "\n" +
+                            "§fСервер: §cглобальный\n" +
+                            "§fВыдал: §9" + finalIssuer + "\n" +
+                            "§fИстекает через: §c" + (expiry == -1 ? "навсегда" : formatTimeLeft(expiry));
+                    p.kickPlayer(kickMessage);
+                }
+            }
+
+            // Сообщение в чат
+            if (!finalHidden) {
+                String timeStr = finalDuration.equals("навсегда") ? "" : " §fна §b" + formatDuration(finalDuration) + " §f";
+                String coloredReason = finalReason.replace('&', '§');
+                String msg = "§fИгрок §9" + finalIssuer + " §fзабанил IP §c" + finalPlayerName + 
+                             timeStr + "§fпо причине: " + coloredReason + " §7(глобальный)";
+                Bukkit.broadcastMessage(msg);
+            }
+
+            if (adminLogger != null) {
+                adminLogger.log("BANIP", finalPlayerName, finalIssuer, finalReason, finalDuration, finalHidden ? "СКРЫТО" : "ПУБЛИЧНО");
+            }
+        });
+
+        return true;
+    }
+
+    public boolean unbanIp(String playerName, String issuer, String reason) {
+        String ip = getPlayerIp(playerName);
+        if (ip == null || !isIpBanned(ip)) {
+            return false;
+        }
+
+        final String finalIp = ip;
+        final String finalPlayerName = playerName;
+        final String finalIssuer = issuer;
+        final String finalReason = reason;
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            HistoryEntry entry = new HistoryEntry();
+            entry.type = "unbanip";
+            entry.player = finalPlayerName;
+            entry.issuer = finalIssuer;
+            entry.reason = finalReason;
+            entry.duration = "навсегда";
+            entry.timestamp = System.currentTimeMillis();
+            entry.hidden = false;
+            addHistorySync(finalPlayerName, entry);
+
+            ipBans.remove(finalIp);
+            ipBanIssuers.remove(finalIp);
+            ipBanReasons.remove(finalIp);
+            saveHistory();
+
+            String msg = "§fИгрок §9" + finalIssuer + " §fразбанил IP §c" + finalPlayerName + 
+                         " §fпо причине: §7" + finalReason + " (глобальный)";
+            Bukkit.broadcastMessage(msg);
+
+            if (adminLogger != null) {
+                adminLogger.log("UNBANIP", finalPlayerName, finalIssuer, finalReason, "навсегда", "ПУБЛИЧНО");
+            }
+        });
+
+        return true;
+    }
+
+    public boolean isIpBanned(String ip) {
+        if (ip == null) return false;
+        Long expiry = ipBans.get(ip);
+        if (expiry == null) return false;
+        if (expiry == -1) return true;
+        if (System.currentTimeMillis() > expiry) {
+            ipBans.remove(ip);
+            ipBanIssuers.remove(ip);
+            ipBanReasons.remove(ip);
+            return false;
+        }
+        return true;
+    }
+
+    public String getIpBanReason(String ip) {
+        return ipBanReasons.get(ip);
+    }
+
+    public String getIpBanIssuer(String ip) {
+        return ipBanIssuers.get(ip);
+    }
+
+    // ============================================
     // ==== КРАСИВОЕ СООБЩЕНИЕ В ЧАТ =====
     // ============================================
     private String buildChatMessage(String action, String target, String issuer, String reason, String duration) {
         String coloredReason = reason.replace('&', '§');
         String durationStr = (duration != null && !duration.equals("навсегда")) ? " §fна §b" + formatDuration(duration) + " §f" : " §f";
 
-        String msg = "§c§l(! ) §fИгрок §9" + issuer + " §f" + action + " §c" + target + durationStr + "§fпо причине: " + coloredReason + " §7(глобальный)";
-        return msg;
+        return "§c§l(! ) §fИгрок §9" + issuer + " §f" + action + " §c" + target + durationStr + "§fпо причине: " + coloredReason + " §7(глобальный)";
     }
 
     // ============================================
@@ -486,10 +664,28 @@ public class PunishmentManager implements Listener {
             savePlayerIp(playerName, player.getAddress().getHostString());
         }
 
+        String ip = getPlayerIp(playerName);
+
+        // Проверяем IP бан
+        if (ip != null && isIpBanned(ip)) {
+            String reason = getIpBanReason(ip);
+            String issuer = getIpBanIssuer(ip);
+            String expiry = getIpBanExpiry(ip);
+            event.disallow(PlayerLoginEvent.Result.KICK_BANNED,
+                "§c§lВаш IP заблокирован!\n\n" +
+                "§fПричина: §c" + reason + "\n" +
+                "§fСервер: §cглобальный\n" +
+                "§fВыдал: §9" + issuer + "\n" +
+                "§fИстекает через: §c" + expiry);
+            return;
+        }
+
+        // Проверяем обычный бан игрока
         if (isBanned(playerName)) {
             String kickMessage = getFullBanMessage(playerName);
             if (kickMessage != null) {
                 event.disallow(PlayerLoginEvent.Result.KICK_BANNED, kickMessage);
+                return;
             }
         }
     }
@@ -538,6 +734,13 @@ public class PunishmentManager implements Listener {
 
     public String getPlayerIp(String playerName) {
         return historyConfig.getString(playerName + ".lastIp", "—");
+    }
+
+    public String getIpBanExpiry(String ip) {
+        Long expiry = ipBans.get(ip);
+        if (expiry == null) return "навсегда";
+        if (expiry == -1) return "навсегда";
+        return formatTimeLeft(expiry);
     }
 
     public HistoryEntry getLastBan(String playerName) {
@@ -825,6 +1028,8 @@ public class PunishmentManager implements Listener {
                 case "kick": actionName = "кикнут"; break;
                 case "unban": actionName = "разбанен"; break;
                 case "unmute": actionName = "размучен"; break;
+                case "banip": actionName = "забанен по IP"; break;
+                case "unbanip": actionName = "разбанен по IP"; break;
                 default: actionName = entry.type;
             }
 
@@ -935,6 +1140,8 @@ public class PunishmentManager implements Listener {
                 case "kick": return "кикнут";
                 case "unban": return "разбанен";
                 case "unmute": return "размучен";
+                case "banip": return "забанен по IP";
+                case "unbanip": return "разбанен по IP";
                 default: return type;
             }
         }
