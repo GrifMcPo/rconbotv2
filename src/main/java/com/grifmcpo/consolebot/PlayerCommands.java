@@ -62,13 +62,19 @@ public class PlayerCommands implements CommandExecutor {
             return true;
         }
 
+        // Проверяем флаг -s
+        boolean hidden = false;
+        if (args[args.length - 1].equalsIgnoreCase("-s")) {
+            hidden = true;
+            args = Arrays.copyOf(args, args.length - 1);
+        }
+
         String playerName = args[0];
         String duration = args[1];
         String reason = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
         String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
 
-        // banPlayer(playerName, issuer, reason, duration, hidden, broadcast)
-        boolean success = punishmentManager.banPlayer(playerName, issuer, reason, duration, false, true);
+        boolean success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, !hidden);
         if (success) {
             sender.sendMessage("§aИгрок " + playerName + " забанен на " + duration + " по причине: " + reason);
             commandLogger.logCommand(sender.getName(), "ban " + playerName + " " + duration + " " + reason);
@@ -90,13 +96,18 @@ public class PlayerCommands implements CommandExecutor {
             return true;
         }
 
+        boolean hidden = false;
+        if (args[args.length - 1].equalsIgnoreCase("-s")) {
+            hidden = true;
+            args = Arrays.copyOf(args, args.length - 1);
+        }
+
         String playerName = args[0];
         String duration = args[1];
         String reason = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
         String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
 
-        // mutePlayer(playerName, issuer, reason, duration, hidden, broadcast)
-        boolean success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, false, true);
+        boolean success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, !hidden);
         if (success) {
             sender.sendMessage("§aИгрок " + playerName + " замучен на " + duration + " по причине: " + reason);
             commandLogger.logCommand(sender.getName(), "mute " + playerName + " " + duration + " " + reason);
@@ -117,12 +128,17 @@ public class PlayerCommands implements CommandExecutor {
             return true;
         }
 
+        boolean hidden = false;
+        if (args[args.length - 1].equalsIgnoreCase("-s")) {
+            hidden = true;
+            args = Arrays.copyOf(args, args.length - 1);
+        }
+
         String playerName = args[0];
         String reason = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
         String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
 
-        // kickPlayer(playerName, issuer, reason, hidden, broadcast)
-        boolean success = punishmentManager.kickPlayer(playerName, issuer, reason, false, true);
+        boolean success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden, !hidden);
         if (success) {
             sender.sendMessage("§aИгрок " + playerName + " кикнут по причине: " + reason);
             commandLogger.logCommand(sender.getName(), "kick " + playerName + " " + reason);
