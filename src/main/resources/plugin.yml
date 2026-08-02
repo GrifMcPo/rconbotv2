@@ -1,5 +1,5 @@
 name: TelegramConsoleBot
-version: 2.0
+version: 2.0 
 main: com.grifmcpo.consolebot.TelegramConsoleBot
 api-version: 1.21
 author: GrifMcPO
