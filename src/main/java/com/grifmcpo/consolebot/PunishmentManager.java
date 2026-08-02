@@ -31,8 +31,8 @@ public class PunishmentManager implements Listener {
     private final Map<String, String> muteReasons = new ConcurrentHashMap<>();
     private final Map<String, String> banIssuers = new ConcurrentHashMap<>();
     private final Map<String, String> banReasons = new ConcurrentHashMap<>();
-    private final Map<String, List<String>> bannedIps = new ConcurrentHashMap<>(); // playerName -> list of banned IPs
-    private final Map<String, Long> ipBanExpiry = new ConcurrentHashMap<>(); // playerName -> expiry
+    private final Map<String, List<String>> bannedIps = new ConcurrentHashMap<>();
+    private final Map<String, Long> ipBanExpiry = new ConcurrentHashMap<>();
 
     private final List<String> allowedCommands = Arrays.asList("msg", "tell", "r", "reply", "help", "pay", "balance", "bal");
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
@@ -151,7 +151,6 @@ public class PunishmentManager implements Listener {
     private void checkExpiredPunishments() {
         long now = System.currentTimeMillis();
 
-        // Проверка банов
         for (Map.Entry<String, Long> entry : new HashMap<>(bans).entrySet()) {
             String playerName = entry.getKey();
             long expiry = entry.getValue();
@@ -163,7 +162,6 @@ public class PunishmentManager implements Listener {
             }
         }
 
-        // Проверка мутов
         for (Map.Entry<String, Long> entry : new HashMap<>(mutes).entrySet()) {
             String playerName = entry.getKey();
             long expiry = entry.getValue();
@@ -179,7 +177,6 @@ public class PunishmentManager implements Listener {
             }
         }
 
-        // Проверка IP банов
         for (Map.Entry<String, Long> entry : new HashMap<>(ipBanExpiry).entrySet()) {
             String playerName = entry.getKey();
             long expiry = entry.getValue();
@@ -215,6 +212,16 @@ public class PunishmentManager implements Listener {
     }
 
     // ============================================
+    // ==== ВСПОМОГАТЕЛЬНЫЙ МЕТОД ДЛЯ ДОБАВЛЕНИЯ В ИСТОРИЮ =====
+    // ============================================
+    
+    private void addHistorySync(String playerName, HistoryEntry entry) {
+        List<HistoryEntry> list = history.computeIfAbsent(playerName, k -> new ArrayList<>());
+        list.add(entry);
+        saveHistory();
+    }
+
+    // ============================================
     // ==== БАН =====
     // ============================================
     public boolean banPlayer(String playerName, String issuer, String reason, String duration, boolean hidden, boolean broadcast) {
@@ -246,7 +253,6 @@ public class PunishmentManager implements Listener {
             banReasons.put(finalPlayerName, finalReason);
             saveHistory();
 
-            // Кикаем игрока
             Player player = Bukkit.getPlayer(finalPlayerName);
             if (player != null && player.isOnline()) {
                 String expiryStr = expiry == -1 ? "навсегда" : formatTimeLeft(expiry);
@@ -519,7 +525,6 @@ public class PunishmentManager implements Listener {
             bannedIps.put(finalPlayerName, ips);
             ipBanExpiry.put(finalPlayerName, expiry);
 
-            // Кикаем игрока
             Player p = Bukkit.getPlayer(finalPlayerName);
             if (p != null && p.isOnline()) {
                 p.kickPlayer("§c§lВаш IP адрес заблокирован!\n" +
@@ -529,9 +534,7 @@ public class PunishmentManager implements Listener {
                         "§fИстекает через: §c" + (expiry == -1 ? "навсегда" : formatTimeLeft(expiry)));
             }
 
-            // Бан самого игрока
             banPlayer(finalPlayerName, finalIssuer, finalReason, finalDuration, finalHidden, true);
-
             plugin.getLogger().info("IP " + finalIp + " игрока " + finalPlayerName + " забанен на " + finalDuration);
         });
 
@@ -579,7 +582,6 @@ public class PunishmentManager implements Listener {
         String playerName = player.getName();
         String ip = player.getAddress() != null ? player.getAddress().getHostString() : "—";
 
-        // Проверка IP бана
         if (isIpBanned(playerName, ip)) {
             String kickMessage = "§c§lВаш IP адрес заблокирован!\n" +
                     "\n" +
@@ -590,7 +592,6 @@ public class PunishmentManager implements Listener {
             return;
         }
 
-        // Проверка бана
         if (isBanned(playerName)) {
             String kickMessage = getFullBanMessage(playerName);
             if (kickMessage != null) {
