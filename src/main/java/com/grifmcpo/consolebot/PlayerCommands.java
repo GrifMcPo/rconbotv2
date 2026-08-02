@@ -45,6 +45,10 @@ public class PlayerCommands implements CommandExecutor {
                 return handleShist(sender, args);
             case "dupeip":
                 return handleDupeip(sender, args);
+            case "banip":
+                return handleBanIp(sender, args);
+            case "unbanip":
+                return handleUnbanIp(sender, args);
             default:
                 return false;
         }
@@ -57,12 +61,10 @@ public class PlayerCommands implements CommandExecutor {
         }
 
         if (args.length < 3) {
-            sender.sendMessage("§cИспользование: /ban <ник> <время> <причина>");
-            sender.sendMessage("§cПример: /ban pley1657 1d спам");
+            sender.sendMessage("§cИспользование: /ban <ник> <время> <причина> [-s]");
             return true;
         }
 
-        // Проверяем флаг -s
         boolean hidden = false;
         if (args[args.length - 1].equalsIgnoreCase("-s")) {
             hidden = true;
@@ -91,8 +93,7 @@ public class PlayerCommands implements CommandExecutor {
         }
 
         if (args.length < 3) {
-            sender.sendMessage("§cИспользование: /mute <ник> <время> <причина>");
-            sender.sendMessage("§cПример: /mute pley1657 30m флуд");
+            sender.sendMessage("§cИспользование: /mute <ник> <время> <причина> [-s]");
             return true;
         }
 
@@ -124,7 +125,7 @@ public class PlayerCommands implements CommandExecutor {
         }
 
         if (args.length < 2) {
-            sender.sendMessage("§cИспользование: /kick <ник> <причина>");
+            sender.sendMessage("§cИспользование: /kick <ник> <причина> [-s]");
             return true;
         }
 
@@ -271,6 +272,65 @@ public class PlayerCommands implements CommandExecutor {
 
         sender.sendMessage(response.toString());
         commandLogger.logCommand(sender.getName(), "dupeip " + playerName);
+        return true;
+    }
+
+    // ===== BANIP =====
+    private boolean handleBanIp(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("telegramconsolebot.banip")) {
+            sender.sendMessage("§cУ вас нет прав на использование этой команды!");
+            return true;
+        }
+
+        if (args.length < 3) {
+            sender.sendMessage("§cИспользование: /banip <ник> <время> <причина> [-s]");
+            return true;
+        }
+
+        boolean hidden = false;
+        if (args[args.length - 1].equalsIgnoreCase("-s")) {
+            hidden = true;
+            args = Arrays.copyOf(args, args.length - 1);
+        }
+
+        String playerName = args[0];
+        String duration = args[1];
+        String reason = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
+        String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
+
+        boolean success = punishmentManager.banIp(playerName, issuer, reason, duration, hidden);
+        if (success) {
+            sender.sendMessage("§aIP игрока " + playerName + " забанен на " + duration + " по причине: " + reason);
+            commandLogger.logCommand(sender.getName(), "banip " + playerName + " " + duration + " " + reason);
+        } else {
+            sender.sendMessage("§cНе удалось забанить IP " + playerName);
+        }
+        return true;
+    }
+
+    // ===== UNBANIP =====
+    private boolean handleUnbanIp(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("telegramconsolebot.unbanip")) {
+            sender.sendMessage("§cУ вас нет прав на использование этой команды!");
+            return true;
+        }
+
+        if (args.length < 2) {
+            sender.sendMessage("§cИспользование: /unbanip <ник> <причина>");
+            return true;
+        }
+
+        String playerName = args[0];
+        String reason = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+        String issuer = sender instanceof Player ? ((Player) sender).getName() : "Console";
+
+        boolean success = punishmentManager.unbanIp(playerName, issuer, reason);
+        if (success) {
+            sender.sendMessage("§aIP игрока " + playerName + " разбанен по причине: " + reason);
+            commandLogger.logCommand(sender.getName(), "unbanip " + playerName + " " + reason);
+        } else {
+            sender.sendMessage("§cIP игрока " + playerName + " не забанен!");
+        }
         return true;
     }
 }
