@@ -599,7 +599,6 @@ public class PunishmentManager implements Listener {
 
         plugin.getLogger().info("🔐 Проверка входа для " + playerName + " (IP: " + ip + ")");
 
-        // 1. Проверка IP бана
         if (isIpBanned(playerName, ip)) {
             String kickMessage = "§c§lВаш IP адрес заблокирован!\n" +
                     "\n" +
@@ -610,7 +609,6 @@ public class PunishmentManager implements Listener {
             return;
         }
 
-        // 2. Проверка бана аккаунта
         if (isBanned(playerName)) {
             String kickMessage = getFullBanMessage(playerName);
             if (kickMessage != null) {
@@ -752,25 +750,67 @@ public class PunishmentManager implements Listener {
         return history.getOrDefault(playerName, new ArrayList<>());
     }
 
+    // ============================================
+    // ==== isBanned() — ПРОВЕРЯЕТ ИЗ ПАМЯТИ И ИЗ ФАЙЛА =====
+    // ============================================
+    
     public boolean isBanned(String playerName) {
+        // 1. Сначала проверяем в памяти
         Long expiry = bans.get(playerName);
-        if (expiry == null) {
-            plugin.getLogger().info("isBanned(" + playerName + ") = false (нет в bans)");
-            return false;
-        }
-        if (expiry == -1) {
-            plugin.getLogger().info("isBanned(" + playerName + ") = true (навсегда)");
+        if (expiry != null) {
+            if (expiry == -1) {
+                plugin.getLogger().info("isBanned(" + playerName + ") = true (навсегда из памяти)");
+                return true;
+            }
+            if (System.currentTimeMillis() > expiry) {
+                bans.remove(playerName);
+                banIssuers.remove(playerName);
+                banReasons.remove(playerName);
+                plugin.getLogger().info("isBanned(" + playerName + ") = false (истек из памяти)");
+                return false;
+            }
+            plugin.getLogger().info("isBanned(" + playerName + ") = true (активен из памяти)");
             return true;
         }
-        if (System.currentTimeMillis() > expiry) {
-            bans.remove(playerName);
-            banIssuers.remove(playerName);
-            banReasons.remove(playerName);
-            plugin.getLogger().info("isBanned(" + playerName + ") = false (истек)");
+
+        // 2. Если в памяти нет — проверяем напрямую из history.yml
+        List<HistoryEntry> list = history.get(playerName);
+        if (list == null || list.isEmpty()) {
+            plugin.getLogger().info("isBanned(" + playerName + ") = false (нет истории)");
             return false;
         }
-        plugin.getLogger().info("isBanned(" + playerName + ") = true (активен до " + formatTimeLeft(expiry) + ")");
-        return true;
+
+        // Идём с конца — берём последнее наказание
+        for (int i = list.size() - 1; i >= 0; i--) {
+            HistoryEntry he = list.get(i);
+            if (he.type.equals("ban")) {
+                // Проверяем, есть ли разбан ПОСЛЕ этого бана
+                boolean wasUnbanned = false;
+                for (int j = i + 1; j < list.size(); j++) {
+                    if (list.get(j).type.equals("unban")) {
+                        wasUnbanned = true;
+                        plugin.getLogger().info("isBanned(" + playerName + ") = false (найден разбан после бана)");
+                        break;
+                    }
+                }
+                if (!wasUnbanned) {
+                    long exp = he.duration.equals("навсегда") ? -1 : he.timestamp + parseTimeToMillis(he.duration);
+                    if (exp == -1 || exp > System.currentTimeMillis()) {
+                        // Восстанавливаем бан в памяти
+                        bans.put(playerName, exp);
+                        banIssuers.put(playerName, he.issuer);
+                        banReasons.put(playerName, he.reason);
+                        plugin.getLogger().info("isBanned(" + playerName + ") = true (восстановлен из файла)");
+                        return true;
+                    } else {
+                        plugin.getLogger().info("isBanned(" + playerName + ") = false (бан истек)");
+                    }
+                }
+                return false;
+            }
+        }
+        plugin.getLogger().info("isBanned(" + playerName + ") = false (нет активного бана)");
+        return false;
     }
 
     public boolean isMuted(String playerName) {
