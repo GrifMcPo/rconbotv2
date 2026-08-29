@@ -57,10 +57,10 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         this.authManager = authManager;
         loadHiddenViewers();
         loadKnownUsers();
-
+        
         plugin.getLogger().info("🤖 TelegramBotHandler инициализирован!");
         plugin.getLogger().info("📌 Бот готов к приёму команд!");
-        plugin.getLogger().info("💡 Для бизнес-команд используйте: .rcon <команда>");
+        plugin.getLogger().info("💡 Для бизнес-команд (в чатах с собеседниками) используйте: .rcon <команда>");
     }
 
     private void loadHiddenViewers() {
@@ -112,38 +112,23 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        // Обработка callback-запросов (кнопки)
         if (update.hasCallbackQuery()) {
             handleCallbackQuery(update);
             return;
         }
 
-        // ⭐ ПРОВЕРКА: Это бизнес-сообщение?
-        String jsonString = update.toString();
-        
-        // Проверяем разными способами наличие бизнес-сообщения
-        boolean isBusiness = false;
+        // ⭐ НОВОЕ: Проверка на бизнес-сообщение (чат с собеседником)
         try {
-            JsonNode root = objectMapper.readTree(jsonString);
-            if (root.has("business_message")) {
-                isBusiness = true;
-                plugin.getLogger().info("🔍 Обнаружено business_message (прямой путь)");
-            } else if (root.has("message") && root.path("message").has("business_connection_id")) {
-                isBusiness = true;
-                plugin.getLogger().info("🔍 Обнаружено business_connection_id в message");
+            String json = update.toString();
+            if (json.contains("\"business_message\"") || json.contains("\"business_connection_id\"")) {
+                plugin.getLogger().info("📩 Обнаружено бизнес-сообщение!");
+                handleBusinessMessage(update);
+                return;
             }
         } catch (Exception e) {
             // Игнорируем ошибки парсинга
         }
 
-        // Если это бизнес-сообщение — обрабатываем отдельно
-        if (isBusiness) {
-            plugin.getLogger().info("📩 ПЕРЕХОД В handleBusinessMessage()");
-            handleBusinessMessage(update);
-            return;
-        }
-
-        // Обычные сообщения (ЛС с ботом, группы)
         if (!update.hasMessage() || !update.getMessage().hasText()) return;
 
         String messageText = update.getMessage().getText().trim();
@@ -151,7 +136,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         long chatId = update.getMessage().getChatId();
 
         saveKnownUser(userId);
-        plugin.getLogger().info("📩 Обычное сообщение от " + userId + ": " + messageText);
+        plugin.getLogger().info("Получено: " + messageText + " от " + userId);
 
         if (botBanManager.isBanned(userId)) {
             sendMessage(chatId, botBanManager.getBanMessage(userId));
@@ -204,64 +189,31 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        // === ПРОВЕРКА ДЛЯ !rcon КОМАНД ===
-        if (messageText.startsWith("!rcon")) {
-            boolean isGroup = update.getMessage().isGroupMessage() || update.getMessage().isSuperGroupMessage();
-
-            if (isGroup) {
-                if (!messageText.startsWith("!rcon global ")) {
-                    sendMessage(chatId, "[БОТ] В группе используйте: !rcon global <команда>");
-                    return;
-                }
-                String userGroup = groupManager.getUserGroup(userId);
-                if (userGroup == null && !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
-                    sendMessage(chatId, "[БОТ] У Вас нет доступа к боту!");
-                    return;
-                }
-                plugin.getLogger().info("⚙️ Групповая RCON: " + messageText);
-                handleRconCommand(chatId, messageText.substring(13).trim(), userId);
-                return;
+        if (!messageText.startsWith("!rcon global ")) {
+            if (messageText.startsWith("!")) {
+                sendMessage(chatId, "[БОТ] Неизвестная команда. Введите /помощь для списка команд.");
             }
-
-            if (!isGroup) {
-                String cmd = messageText.substring(6).trim();
-                if (cmd.isEmpty()) {
-                    sendMessage(chatId, "[БОТ] Использование: !rcon <команда>");
-                    return;
-                }
-                String userGroup = groupManager.getUserGroup(userId);
-                if (userGroup == null && !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
-                    sendMessage(chatId, "[БОТ] У Вас нет доступа к боту!");
-                    return;
-                }
-                plugin.getLogger().info("⚙️ ЛС RCON: " + cmd);
-                handleRconCommand(chatId, cmd, userId);
-                return;
-            }
+            return;
         }
 
-        if (messageText.startsWith("!")) {
-            sendMessage(chatId, "[БОТ] Неизвестная команда. Введите /помощь для списка команд.");
+        String userGroup = groupManager.getUserGroup(userId);
+        if (userGroup == null && !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+            sendMessage(chatId, "[БОТ] У Вас нет доступа к боту!");
+            return;
         }
+
+        handleRconCommand(chatId, messageText.substring(13).trim(), userId);
     }
 
     // ================================================================
-    // ⭐ БЛОК: ОБРАБОТКА БИЗНЕС-СООБЩЕНИЙ (ЧАТЫ С СОБЕСЕДНИКАМИ)
+    // ⭐ НОВЫЙ БЛОК: ОБРАБОТКА БИЗНЕС-СООБЩЕНИЙ (ЧАТЫ С СОБЕСЕДНИКАМИ)
     // ================================================================
 
-    /**
-     * Обработка сообщений из бизнес-чатов (чаты с собеседниками)
-     */
     private void handleBusinessMessage(Update update) {
-        plugin.getLogger().info("📩 === ВХОД В handleBusinessMessage() ===");
-        
         try {
             String json = update.toString();
-            plugin.getLogger().info("📩 RAW JSON: " + json.substring(0, Math.min(json.length(), 500)) + "...");
-
             JsonNode root = objectMapper.readTree(json);
             
-            // Ищем business_message
             JsonNode businessMessage = root.path("business_message");
             if (businessMessage.isMissingNode()) {
                 // Альтернативный путь: может быть в message с полем business_connection_id
@@ -270,7 +222,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                     businessMessage = message;
                     plugin.getLogger().info("📩 Найдено business_connection_id в message");
                 } else {
-                    plugin.getLogger().info("⏭️ Пропускаем: не бизнес-сообщение (нет business_message)");
+                    plugin.getLogger().info("⏭️ Пропускаем: не бизнес-сообщение");
                     return;
                 }
             }
@@ -286,83 +238,50 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             int messageId = businessMessage.path("message_id").asInt();
             String connectionId = businessMessage.path("business_connection_id").asText();
 
-            // Если connectionId пустой — пробуем взять из корня
             if (connectionId == null || connectionId.isEmpty()) {
                 connectionId = root.path("business_connection_id").asText();
             }
 
-            plugin.getLogger().info("📩 Бизнес-сообщение:");
-            plugin.getLogger().info("   👤 userId: " + userId);
-            plugin.getLogger().info("   💬 chatId: " + chatId);
-            plugin.getLogger().info("   📝 messageId: " + messageId);
+            plugin.getLogger().info("📩 Бизнес-сообщение от " + userId + ": " + text);
             plugin.getLogger().info("   🔗 connectionId: " + connectionId);
-            plugin.getLogger().info("   📄 text: " + text);
 
-            // ⭐ ПРОВЕРКА: Это событие ПОДКЛЮЧЕНИЯ бизнес-аккаунта?
-            if (text.contains("подключен") || text.contains("connected") || 
-                (businessMessage.has("business_connection_id") && connectionId != null && !connectionId.isEmpty())) {
-                plugin.getLogger().info("✅✅✅ БОТ ПОДКЛЮЧЕН К БИЗНЕС-АККАУНТУ! ✅✅✅");
-                plugin.getLogger().info("🔗 Connection ID: " + connectionId);
-                plugin.getLogger().info("👤 User ID: " + userId);
-                plugin.getLogger().info("📌 Теперь можно использовать .rcon команды в чатах с собеседниками!");
-                
-                // Отправляем подтверждение в чат
-                sendBusinessMessage(chatId, 
-                    "✅ БОТ ПОДКЛЮЧЕН К БИЗНЕС-АККАУНТУ!\n" +
-                    "🔗 Connection ID: " + connectionId + "\n" +
-                    "📌 Теперь можно использовать: .rcon <команда>\n" +
-                    "💡 Пример: .rcon ban Steve 1d Спам", 
-                    connectionId);
-                return;
-            }
-
-            // Проверка: только админы
+            // ⭐ Проверка: только админы
             if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
                 plugin.getLogger().info("⛔ Не админ: " + userId);
                 return;
             }
 
-            // Проверка: команда должна начинаться с "."
+            // ⭐ Проверка: команда должна начинаться с "."
             if (!text.startsWith(".")) {
                 plugin.getLogger().info("⏭️ Не команда (нет .): " + text);
                 return;
             }
 
-            // Проверка: есть ли connection_id
             if (connectionId == null || connectionId.isEmpty()) {
                 plugin.getLogger().warning("❌ Нет business_connection_id для " + userId);
-                sendBusinessMessage(chatId, 
-                    "[БОТ] ❌ Ошибка: нет подключения к бизнес-аккаунту!\n" +
-                    "Проверьте, что бот добавлен в бизнес-аккаунт Telegram.", 
-                    "");
+                sendBusinessMessage(chatId, "[БОТ] ❌ Ошибка: нет подключения к бизнес-аккаунту!", "");
                 return;
             }
 
-            // ⭐ Удаляем сообщение с командой
-            plugin.getLogger().info("🗑️ Удаляем сообщение с командой (ID: " + messageId + ")");
+            // ⭐ Удаляем сообщение с командой (чтобы собеседник не видел)
             deleteBusinessMessage(connectionId, messageId);
+            plugin.getLogger().info("🗑️ Удалено сообщение с командой (ID: " + messageId + ")");
 
             // Убираем точку
             String cmd = text.substring(1).trim();
             plugin.getLogger().info("⚙️ Команда без точки: " + cmd);
 
-            // Обрабатываем команду
+            // ⭐ Обрабатываем команду
             handleBusinessCommand(chatId, cmd, userId, connectionId);
 
         } catch (Exception e) {
-            plugin.getLogger().warning("⚠️ ОШИБКА в handleBusinessMessage: " + e.getMessage());
+            plugin.getLogger().warning("⚠️ Ошибка обработки бизнес-сообщения: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-    /**
-     * Обрабатывает команды из бизнес-чатов (с префиксом ".")
-     */
     private void handleBusinessCommand(long chatId, String cmd, long userId, String connectionId) {
-        plugin.getLogger().info("⚙️ === ВХОД В handleBusinessCommand() ===");
-        plugin.getLogger().info("⚙️ Команда: " + cmd);
-        plugin.getLogger().info("⚙️ От: " + userId);
-        plugin.getLogger().info("⚙️ connectionId: " + connectionId);
+        plugin.getLogger().info("⚙️ Бизнес-команда: " + cmd + " от " + userId);
 
         // Проверяем права
         if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
@@ -389,21 +308,34 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        plugin.getLogger().info("✅ ВЫПОЛНЯЕМ RCON КОМАНДУ: " + rconCmd);
-        plugin.getLogger().info("✅ От пользователя: " + userId);
+        plugin.getLogger().info("✅ Выполняем RCON: " + rconCmd);
 
-        // Выполняем команду
+        // ⭐ ВАЖНО: Проверяем права на конкретную команду через groupManager
+        String cmdName = rconCmd.split(" ")[0];
+        String fullCommand = "!rcon global " + cmdName;
+        if (!groupManager.hasPermission(userId, fullCommand) &&
+                !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+            sendBusinessMessage(chatId, "[БОТ] У вас нет доступа к данной команде!", connectionId);
+            plugin.getLogger().info("Доступ запрещён: " + userId + " -> " + cmdName);
+            return;
+        }
+
+        // Выполняем команду через существующий handleRconCommand
+        // Но нам нужно сохранить формат вывода, поэтому вызываем напрямую методы
         Bukkit.getScheduler().runTask(plugin, () -> {
             try {
-                plugin.getLogger().info("🔄 Запуск commandExecutor.executeCommand()");
-                String response = commandExecutor.executeCommand(rconCmd, "Telegram@" + userId);
-                plugin.getLogger().info("📤 Ответ от сервера: " + (response == null ? "null" : response.substring(0, Math.min(response.length(), 200)) + "..."));
+                // Используем существующие методы для обработки команд
+                // Они отправляют ответ через sendMessage, но нам нужно отправить в бизнес-чат
+                // Поэтому мы перехватываем ответ и отправляем через sendBusinessMessage
                 
-                if (response == null || response.isEmpty()) {
-                    response = "✅ Команда выполнена!";
-                }
-                sendBusinessMessage(chatId, "[БОТ] Ответ:\n" + response, connectionId);
-                plugin.getLogger().info("✅ Ответ отправлен в бизнес-чат");
+                // Временный "перехватчик" ответа
+                // Мы будем использовать существующие методы, но заменим sendMessage на sendBusinessMessage
+                // Для этого мы создадим временный объект, который будет отправлять ответы в бизнес-чат
+                
+                // Так как мы не можем легко перехватить sendMessage, мы просто вызываем handleRconCommand
+                // с модифицированным поведением - используем отдельный метод
+                processRconCommandForBusiness(chatId, rconCmd, userId, connectionId);
+                
             } catch (Exception e) {
                 plugin.getLogger().warning("⚠️ Ошибка выполнения RCON: " + e.getMessage());
                 e.printStackTrace();
@@ -412,16 +344,526 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         });
     }
 
+    // ⭐ НОВЫЙ МЕТОД: обрабатывает RCON команды для бизнес-чатов
+    private void processRconCommandForBusiness(long chatId, String cmd, long userId, String connectionId) {
+        if (cmd.isEmpty()) {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon <команда>", connectionId);
+            return;
+        }
+
+        String cmdName = cmd.split(" ")[0];
+        String fullCommand = "!rcon global " + cmdName;
+
+        if (!groupManager.hasPermission(userId, fullCommand) &&
+                !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+            sendBusinessMessage(chatId, "[БОТ] У вас нет доступа к данной команде!", connectionId);
+            plugin.getLogger().info("Доступ запрещён: " + userId + " -> " + cmdName);
+            return;
+        }
+
+        // Обрабатываем команды так же, как в handleRconCommand, но отправляем ответ в бизнес-чат
+        if (cmd.startsWith("logs ")) {
+            handleLogsBusiness(chatId, cmd, userId, connectionId);
+            return;
+        }
+        if (cmd.startsWith("shist ")) {
+            handleShistBusiness(chatId, cmd, userId, connectionId);
+            return;
+        }
+        if (cmd.startsWith("hist ")) {
+            handleHistBusiness(chatId, cmd, userId, connectionId);
+            return;
+        }
+        if (cmd.startsWith("dupeip ")) {
+            handleDupeipBusiness(chatId, cmd, userId, connectionId);
+            return;
+        }
+        if (cmd.startsWith("pex user ")) {
+            handlePexUserBusiness(chatId, cmd, userId, connectionId);
+            return;
+        }
+        if (cmd.startsWith("bc ") || cmd.startsWith("bcast ")) {
+            handleBroadcastBusiness(chatId, cmd, userId, connectionId);
+            return;
+        }
+        if (cmd.startsWith("checkban ")) {
+            handleCheckBanBusiness(chatId, cmd, connectionId);
+            return;
+        }
+        if (cmd.startsWith("checkmute ")) {
+            handleCheckMuteBusiness(chatId, cmd, connectionId);
+            return;
+        }
+        if (cmd.startsWith("banlist")) {
+            handleBanListBusiness(chatId, cmd, connectionId);
+            return;
+        }
+        if (cmd.startsWith("mutelist")) {
+            handleMuteListBusiness(chatId, cmd, connectionId);
+            return;
+        }
+        if (cmd.startsWith("banip ")) {
+            handleBanIpBusiness(chatId, cmd, userId, connectionId);
+            return;
+        }
+        if (cmd.startsWith("unbanip ")) {
+            handleUnbanIpBusiness(chatId, cmd, userId, connectionId);
+            return;
+        }
+        if (cmd.startsWith("ban ") || cmd.startsWith("mute ") ||
+                cmd.startsWith("kick ") || cmd.startsWith("unban ") || cmd.startsWith("unmute ")) {
+            handlePunishmentBusiness(chatId, cmd, userId, connectionId);
+            return;
+        }
+
+        executeServerCommandBusiness(chatId, cmd, userId, connectionId);
+    }
+
+    // ================================================================
+    // ⭐ БИЗНЕС-ВЕРСИИ ВСЕХ МЕТОДОВ (отправляют ответ в бизнес-чат)
+    // ================================================================
+
+    private void handleLogsBusiness(long chatId, String cmd, long userId, String connectionId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon logs <ник> [кол-во]", connectionId);
+            return;
+        }
+        String playerName = parts[1];
+        int limit = 10;
+        if (parts.length >= 3) {
+            try { limit = Integer.parseInt(parts[2]); } catch (NumberFormatException e) {}
+            if (limit < 1) limit = 1;
+            if (limit > 50) limit = 50;
+        }
+        String response = commandLogger.getFormattedLogs(playerName, limit);
+        sendBusinessMessage(chatId, response, connectionId);
+    }
+
+    private void handleShistBusiness(long chatId, String cmd, long userId, String connectionId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon shist <ник> [кол-во]", connectionId);
+            return;
+        }
+        String issuerName = parts[1];
+        int limit = 10;
+        if (parts.length >= 3) {
+            try { limit = Integer.parseInt(parts[2]); } catch (NumberFormatException e) {}
+            if (limit < 1) limit = 1;
+            if (limit > 50) limit = 50;
+        }
+        String response = punishmentManager.getFormattedShist(issuerName, limit);
+        sendBusinessMessage(chatId, response, connectionId);
+    }
+
+    private void handleHistBusiness(long chatId, String cmd, long userId, String connectionId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon hist <ник> [кол-во]", connectionId);
+            return;
+        }
+        String playerName = parts[1];
+        int limit = 10;
+        if (parts.length >= 3) {
+            try { limit = Integer.parseInt(parts[2]); } catch (NumberFormatException e) {}
+            if (limit < 1) limit = 1;
+            if (limit > 50) limit = 50;
+        }
+        String response = punishmentManager.getFormattedHistory(playerName, limit);
+        sendBusinessMessage(chatId, response, connectionId);
+    }
+
+    private void handleDupeipBusiness(long chatId, String cmd, long userId, String connectionId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon dupeip <ник>", connectionId);
+            return;
+        }
+        String playerName = parts[1];
+        String targetIp = playerManager.getPlayerIp(playerName);
+        if (targetIp == null || targetIp.equals("—") || targetIp.equals("0.0.0.0")) {
+            sendBusinessMessage(chatId, "[БОТ] Не удалось определить IP игрока " + playerName, connectionId);
+            return;
+        }
+        List<String> playersWithSameIp = playerManager.getPlayersByIp(targetIp);
+        playersWithSameIp.remove(playerName);
+        StringBuilder response = new StringBuilder();
+        response.append("[БОТ] Сканируем по нику: ").append(playerName).append("\n");
+        if (playersWithSameIp.isEmpty()) {
+            response.append("Нет других аккаунтов с этим IP");
+        } else {
+            response.append(String.join(", ", playersWithSameIp));
+        }
+        sendBusinessMessage(chatId, response.toString(), connectionId);
+    }
+
+    private void handlePexUserBusiness(long chatId, String cmd, long userId, String connectionId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 3) {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon pex user <ник>", connectionId);
+            return;
+        }
+        String playerName = parts[2];
+        Player target = Bukkit.getPlayer(playerName);
+        boolean isOnline = target != null && target.isOnline();
+        String group = "default";
+        boolean isOp = false;
+        boolean isWhitelisted = false;
+        String ip = "—";
+        try {
+            if (isOnline) {
+                isOp = target.isOp();
+                ip = target.getAddress() != null ? target.getAddress().getHostString() : "—";
+                try {
+                    net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
+                            .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
+                    if (permission != null) {
+                        group = permission.getPrimaryGroup(target);
+                    }
+                } catch (Exception e) {
+                    group = "неизвестно";
+                }
+            } else {
+                group = "офлайн";
+                ip = playerManager.getPlayerIp(playerName);
+                File opsFile = new File("ops.json");
+                if (opsFile.exists()) {
+                    try {
+                        String content = new String(java.nio.file.Files.readAllBytes(opsFile.toPath()));
+                        isOp = content.contains("\"name\":\"" + playerName + "\"");
+                    } catch (Exception e) {}
+                }
+            }
+            File whitelistFile = new File("whitelist.json");
+            if (whitelistFile.exists()) {
+                try {
+                    String content = new String(java.nio.file.Files.readAllBytes(whitelistFile.toPath()));
+                    isWhitelisted = content.contains("\"name\":\"" + playerName + "\"");
+                } catch (Exception e) {}
+            }
+        } catch (Exception e) {
+            sendBusinessMessage(chatId, "[БОТ] Ошибка: " + e.getMessage(), connectionId);
+            return;
+        }
+        String response = "[БОТ] Ответ сервера:\n";
+        response += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        response += "Ник: " + playerName + "\n";
+        response += "Группа: " + group + "\n";
+        response += "OP: " + (isOp ? "да" : "нет") + "\n";
+        response += "IP: " + ip + "\n";
+        response += "Белый список: " + (isWhitelisted ? "да" : "нет") + "\n";
+        response += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+        sendBusinessMessage(chatId, response, connectionId);
+    }
+
+    private void handleBroadcastBusiness(long chatId, String cmd, long userId, String connectionId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon bc <сообщение>", connectionId);
+            return;
+        }
+        String message = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
+        String sender = plugin.getCustomSender(userId);
+        if (sender == null) sender = "RCON@" + userId;
+        String chatMessage = "§e[Объявление] §f" + message + " §7(пишет: " + sender + "§7)";
+        Bukkit.broadcastMessage(chatMessage);
+        sendBusinessMessage(chatId, "[БОТ] Ответ от сервера:\n[Объявление] " + message + " (пишет: " + sender + ")", connectionId);
+    }
+
+    private void handleCheckBanBusiness(long chatId, String cmd, String connectionId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon checkban <ник>", connectionId);
+            return;
+        }
+        String playerName = parts[1];
+        boolean isBanned = punishmentManager.isBanned(playerName);
+        if (!isBanned) {
+            sendBusinessMessage(chatId, "[БОТ] Игрок " + playerName + " не забанен.", connectionId);
+            return;
+        }
+        String issuer = punishmentManager.getBanIssuer(playerName);
+        String reason = punishmentManager.getBanReason(playerName);
+        String expiry = punishmentManager.getBanExpiry(playerName);
+        PunishmentManager.HistoryEntry entry = punishmentManager.getLastBan(playerName);
+        String isHidden = entry.hidden ? "да" : "нет";
+        String isPermanent = entry.duration.equals("навсегда") ? "да" : "нет";
+        String ipInfo = "нет";
+        String response = "[БОТ] Ответ сервера:\n";
+        response += "----- " + playerName + " -----\n";
+        response += " Причина: " + reason + "\n";
+        response += " Время: " + punishmentManager.getFormattedDateTime(entry.timestamp) + "\n";
+        response += " Истекает: " + expiry + "\n";
+        response += " Сервер: выживание\n";
+        response += " Выдал: " + issuer + "\n";
+        response += " IP: " + ipInfo + ", скрыто: " + isHidden + ", навсегда: " + isPermanent;
+        sendBusinessMessage(chatId, response, connectionId);
+    }
+
+    private void handleCheckMuteBusiness(long chatId, String cmd, String connectionId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon checkmute <ник>", connectionId);
+            return;
+        }
+        String playerName = parts[1];
+        boolean isMuted = punishmentManager.isMuted(playerName);
+        if (!isMuted) {
+            sendBusinessMessage(chatId, "[БОТ] Игрок " + playerName + " не замучен.", connectionId);
+            return;
+        }
+        String issuer = punishmentManager.getMuteIssuer(playerName);
+        String reason = punishmentManager.getMuteReason(playerName);
+        String expiry = punishmentManager.getMuteExpiry(playerName);
+        PunishmentManager.HistoryEntry entry = punishmentManager.getLastMute(playerName);
+        String isHidden = entry.hidden ? "да" : "нет";
+        String isPermanent = entry.duration.equals("навсегда") ? "да" : "нет";
+        String response = "[БОТ] Ответ сервера:\n";
+        response += "----- " + playerName + " -----\n";
+        response += " Причина: " + reason + "\n";
+        response += " Время: " + punishmentManager.getFormattedDateTime(entry.timestamp) + "\n";
+        response += " Истекает: " + expiry + "\n";
+        response += " Сервер: выживание\n";
+        response += " Выдал: " + issuer + "\n";
+        response += " IP: нет, скрыто: " + isHidden + ", навсегда: " + isPermanent;
+        sendBusinessMessage(chatId, response, connectionId);
+    }
+
+    private void handleBanListBusiness(long chatId, String cmd, String connectionId) {
+        int page = 1;
+        String[] parts = cmd.split(" ");
+        if (parts.length > 1) {
+            try { page = Integer.parseInt(parts[1]); } catch (NumberFormatException e) {}
+        }
+        int pageSize = 10;
+        List<String> allBans = punishmentManager.getBanList();
+        List<String> bans = punishmentManager.getBanList(page, pageSize);
+        int totalPages = (int) Math.ceil((double) allBans.size() / pageSize);
+        if (bans.isEmpty()) {
+            sendBusinessMessage(chatId, "[БОТ] Список банов пуст.", connectionId);
+        } else {
+            StringBuilder response = new StringBuilder();
+            response.append("[БОТ] Список банов (Страница ").append(page).append("/").append(totalPages).append(")\n");
+            response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            for (String ban : bans) {
+                response.append(ban).append("\n");
+            }
+            response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            if (totalPages > 1) {
+                response.append("Используй: .rcon banlist ").append(page + 1);
+            }
+            sendBusinessMessage(chatId, response.toString(), connectionId);
+        }
+    }
+
+    private void handleMuteListBusiness(long chatId, String cmd, String connectionId) {
+        int page = 1;
+        String[] parts = cmd.split(" ");
+        if (parts.length > 1) {
+            try { page = Integer.parseInt(parts[1]); } catch (NumberFormatException e) {}
+        }
+        int pageSize = 10;
+        List<String> allMutes = punishmentManager.getMuteList();
+        List<String> mutes = punishmentManager.getMuteList(page, pageSize);
+        int totalPages = (int) Math.ceil((double) allMutes.size() / pageSize);
+        if (mutes.isEmpty()) {
+            sendBusinessMessage(chatId, "[БОТ] Список мутов пуст.", connectionId);
+        } else {
+            StringBuilder response = new StringBuilder();
+            response.append("[БОТ] Список мутов (Страница ").append(page).append("/").append(totalPages).append(")\n");
+            response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            for (String mute : mutes) {
+                response.append(mute).append("\n");
+            }
+            response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            if (totalPages > 1) {
+                response.append("Используй: .rcon mutelist ").append(page + 1);
+            }
+            sendBusinessMessage(chatId, response.toString(), connectionId);
+        }
+    }
+
+    private void handleBanIpBusiness(long chatId, String cmd, long userId, String connectionId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 4) {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon banip <ник> <время> <причина> [-s]", connectionId);
+            return;
+        }
+        boolean hidden = false;
+        String lastArg = parts[parts.length - 1];
+        if (lastArg.equalsIgnoreCase("-s")) {
+            hidden = true;
+            parts = Arrays.copyOf(parts, parts.length - 1);
+        }
+        String playerName = parts[1];
+        String duration = parts[2];
+        String reason = String.join(" ", Arrays.copyOfRange(parts, 3, parts.length));
+        String issuer = plugin.getCustomSender(userId);
+        if (issuer == null) issuer = "RCON@" + userId;
+        Player target = Bukkit.getPlayer(playerName);
+        if (target == null) {
+            sendBusinessMessage(chatId, "[БОТ] Игрок " + playerName + " не найден на сервере!", connectionId);
+            return;
+        }
+        boolean success = punishmentManager.banIp(playerName, issuer, reason, duration, hidden);
+        if (success) {
+            String coloredReason = reason.replace('&', '§');
+            sendBusinessMessage(chatId, "[БОТ] IP игрока " + playerName + " забанен на " + duration + " по причине: " + coloredReason, connectionId);
+        } else {
+            sendBusinessMessage(chatId, "[БОТ] Не удалось забанить IP " + playerName, connectionId);
+        }
+    }
+
+    private void handleUnbanIpBusiness(long chatId, String cmd, long userId, String connectionId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 3) {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon unbanip <ник> <причина>", connectionId);
+            return;
+        }
+        String playerName = parts[1];
+        String reason = String.join(" ", Arrays.copyOfRange(parts, 2, parts.length));
+        String issuer = plugin.getCustomSender(userId);
+        if (issuer == null) issuer = "RCON@" + userId;
+        boolean success = punishmentManager.unbanIp(playerName, issuer, reason);
+        if (success) {
+            String coloredReason = reason.replace('&', '§');
+            sendBusinessMessage(chatId, "[БОТ] IP игрока " + playerName + " разбанен по причине: " + coloredReason, connectionId);
+        } else {
+            sendBusinessMessage(chatId, "[БОТ] IP игрока " + playerName + " не забанен!", connectionId);
+        }
+    }
+
+    private void handlePunishmentBusiness(long chatId, String cmd, long userId, String connectionId) {
+        String[] parts = cmd.split(" ");
+        String action = parts[0];
+        String playerName = parts[1];
+
+        boolean hidden = false;
+        String lastArg = parts[parts.length - 1];
+        if (lastArg.equalsIgnoreCase("-s")) {
+            hidden = true;
+            parts = Arrays.copyOf(parts, parts.length - 1);
+        }
+
+        String duration = "навсегда";
+        String reason = "";
+        int start = 2;
+        int end = parts.length;
+
+        if (end > start + 1 && punishmentManager.isValidTime(parts[2])) {
+            duration = parts[2];
+            start = 3;
+        }
+
+        if (end > start) {
+            reason = String.join(" ", Arrays.copyOfRange(parts, start, end));
+        } else {
+            reason = "Без причины";
+        }
+
+        String issuer = plugin.getCustomSender(userId);
+        if (issuer == null) issuer = "RCON@" + userId;
+        String coloredReason = reason.replace('&', '§');
+
+        boolean success = false;
+        String result = "";
+        boolean broadcast = !hidden;
+
+        switch (action) {
+            case "ban":
+                success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, broadcast);
+                if (success) {
+                    result = "[БОТ] Ответ сервера:\n";
+                    if (hidden) {
+                        result += "[Скрыто] ❨！❩ Игрок " + issuer + " забанил " + playerName +
+                                " на " + duration + " по причине: " + coloredReason + " (глобальный)";
+                    } else {
+                        result += "❨！❩ Игрок " + issuer + " забанил " + playerName +
+                                " на " + duration + " по причине: " + coloredReason + " (глобальный)";
+                    }
+                } else {
+                    result = "[БОТ] " + playerName + " уже забанен!";
+                }
+                break;
+
+            case "mute":
+                success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, broadcast);
+                if (success) {
+                    result = "[БОТ] Ответ сервера:\n";
+                    if (hidden) {
+                        result += "[Скрыто] ❨！❩ Игрок " + issuer + " замутил " + playerName +
+                                " на " + duration + " по причине: " + coloredReason + " (глобальный)";
+                    } else {
+                        result += "❨！❩ Игрок " + issuer + " замутил " + playerName +
+                                " на " + duration + " по причине: " + coloredReason + " (глобальный)";
+                    }
+                } else {
+                    result = "[БОТ] " + playerName + " уже замучен!";
+                }
+                break;
+
+            case "kick":
+                success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden, broadcast);
+                if (success) {
+                    result = "[БОТ] Ответ сервера:\n";
+                    if (hidden) {
+                        result += "[Скрыто] ❨！❩ Игрок " + issuer + " кикнул " + playerName +
+                                " по причине: " + coloredReason + " (глобальный)";
+                    } else {
+                        result += "❨！❩ Игрок " + issuer + " кикнул " + playerName +
+                                " по причине: " + coloredReason + " (глобальный)";
+                    }
+                } else {
+                    result = "[БОТ] " + playerName + " не найден!";
+                }
+                break;
+
+            case "unban":
+                success = punishmentManager.unbanPlayer(playerName, issuer, reason, broadcast);
+                if (success) {
+                    result = "[БОТ] Ответ сервера:\n❨！❩ Игрок " + issuer + " разбанил " + playerName +
+                            " по причине: " + coloredReason + " (глобальный)";
+                } else {
+                    result = "[БОТ] " + playerName + " не забанен!";
+                }
+                break;
+
+            case "unmute":
+                success = punishmentManager.unmutePlayer(playerName, issuer, reason, broadcast);
+                if (success) {
+                    result = "[БОТ] Ответ сервера:\n❨！❩ Игрок " + issuer + " размутил " + playerName +
+                            " по причине: " + coloredReason + " (глобальный)";
+                } else {
+                    result = "[БОТ] " + playerName + " не замучен!";
+                }
+                break;
+        }
+
+        sendBusinessMessage(chatId, result, connectionId);
+    }
+
+    private void executeServerCommandBusiness(long chatId, String command, long userId, String connectionId) {
+        String issuer = plugin.getCustomSender(userId);
+        if (issuer == null) issuer = "RCON@" + userId;
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            commandExecutor.executeCommand(command, issuer);
+            sendBusinessMessage(chatId, "[БОТ] Ответ от сервера:\nКоманда выполнена: " + command, connectionId);
+        });
+    }
+
+    // ================================================================
+    // ⭐ МЕТОДЫ ДЛЯ РАБОТЫ С BUSINESS API
+    // ================================================================
+
     /**
-     * Удаляет сообщение из бизнес-чата
+     * Удаляет сообщение из бизнес-чата (чтобы собеседник не видел команду)
      */
     private void deleteBusinessMessage(String connectionId, int messageId) {
-        plugin.getLogger().info("🗑️ deleteBusinessMessage: connectionId=" + connectionId + ", messageId=" + messageId);
         try {
             String url = "https://api.telegram.org/bot" + botToken + "/deleteBusinessMessages";
             String json = "{\"business_connection_id\":\"" + connectionId + "\",\"message_ids\":[" + messageId + "]}";
-            
-            plugin.getLogger().info("📤 DELETE запрос: " + json);
             
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -429,24 +871,19 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                     .POST(HttpRequest.BodyPublishers.ofString(json))
                     .build();
             
-            HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-            plugin.getLogger().info("🗑️ Результат удаления: " + response.statusCode() + " - " + response.body());
+            HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+            plugin.getLogger().info("🗑️ Удалено бизнес-сообщение: " + messageId);
         } catch (Exception e) {
             plugin.getLogger().warning("⚠️ Не удалось удалить сообщение: " + e.getMessage());
         }
     }
 
     /**
-     * Отправляет сообщение в бизнес-чат
+     * Отправляет сообщение в бизнес-чат (от имени бизнес-аккаунта)
      */
     private void sendBusinessMessage(long chatId, String text, String connectionId) {
-        plugin.getLogger().info("📤 sendBusinessMessage: chatId=" + chatId + ", connectionId=" + connectionId);
-        plugin.getLogger().info("📤 Текст: " + text.substring(0, Math.min(text.length(), 100)) + "...");
-        
         try {
-            // Если нет connectionId — отправляем как обычное сообщение
             if (connectionId == null || connectionId.isEmpty()) {
-                plugin.getLogger().info("⚠️ Нет connectionId, отправляем обычным способом");
                 sendMessage(chatId, text);
                 return;
             }
@@ -458,19 +895,15 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             
             String json = "{\"chat_id\":\"" + chatId + "\",\"text\":\"" + escapedText + "\",\"business_connection_id\":\"" + connectionId + "\"}";
             
-            plugin.getLogger().info("📤 Отправка JSON: " + json);
-            
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(json))
                     .build();
             
-            HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-            plugin.getLogger().info("📤 Результат отправки: " + response.statusCode() + " - " + response.body());
+            HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
         } catch (Exception e) {
             plugin.getLogger().warning("⚠️ Ошибка отправки бизнес-сообщения: " + e.getMessage());
-            // Пробуем отправить обычным способом
             sendMessage(chatId, text);
         }
     }
@@ -540,49 +973,30 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 "/отвязать - подать заявку на отвязку аккаунта\n" +
                 "/привязать <ник> <код> - привязать аккаунт\n" +
                 "/помощь2 - помощь по RCON командам\n" +
-                "/id - показать ваш Telegram ID\n\n" +
-                "В чатах с собеседниками используйте:\n" +
-                ".rcon <команда> - выполнить RCON команду";
+                "/id - показать ваш Telegram ID";
         sendMessage(chatId, msg);
     }
 
     private void sendHelp2(long chatId) {
         String msg = "[БОТ] Помощь по RCON командам:\n\n" +
-                "В ЛИЧНЫХ СООБЩЕНИЯХ (ЛС с ботом):\n" +
-                "!rcon ban <ник> <время> <причина> [-s] - забанить игрока\n" +
-                "!rcon mute <ник> <время> <причина> [-s] - замутить игрока\n" +
-                "!rcon kick <ник> <причина> [-s] - кикнуть игрока\n" +
-                "!rcon unban <ник> - разбанить игрока\n" +
-                "!rcon unmute <ник> - размутить игрока\n" +
-                "!rcon banip <ник> <время> <причина> [-s] - забанить IP игрока\n" +
-                "!rcon checkban <ник> - проверить бан\n" +
-                "!rcon checkmute <ник> - проверить мут\n" +
-                "!rcon banlist - список банов\n" +
-                "!rcon mutelist - список мутов\n" +
-                "!rcon logs <ник> [кол-во] - логи команд\n" +
-                "!rcon hist <ник> [кол-во] - история наказаний игрока\n" +
-                "!rcon shist <ник> [кол-во] - наказания выданные игроком\n" +
-                "!rcon dupeip <ник> - поиск по IP\n" +
-                "!rcon pex user <ник> - информация об игроке\n" +
-                "!rcon bc <текст> - объявление в чат\n\n" +
-                "В ГРУППОВЫХ ЧАТАХ используйте: !rcon global <команда>\n\n" +
-                "В ЧАТАХ С СОБЕСЕДНИКАМИ (Business API):\n" +
-                ".rcon ban <ник> <время> <причина> [-s] - забанить игрока\n" +
-                ".rcon mute <ник> <время> <причина> [-s] - замутить игрока\n" +
-                ".rcon kick <ник> <причина> [-s] - кикнуть игрока\n" +
-                ".rcon checkban <ник> - проверить бан\n" +
-                ".rcon checkmute <ник> - проверить мут\n" +
-                ".rcon banlist - список банов\n" +
-                ".rcon mutelist - список мутов\n" +
-                ".rcon logs <ник> [кол-во] - логи команд\n" +
-                ".rcon hist <ник> [кол-во] - история наказаний игрока\n" +
-                ".rcon shist <ник> [кол-во] - наказания выданные игроком\n" +
-                ".rcon dupeip <ник> - поиск по IP\n" +
-                ".rcon pex user <ник> - информация об игроке\n" +
-                ".rcon bc <текст> - объявление в чат\n" +
-                ".rcon unban <ник> - разбанить игрока\n" +
-                ".rcon unmute <ник> - размутить игрока\n\n" +
-                "💡 Команда удаляется автоматически, собеседник её не видит!";
+                "!rcon global ban <ник> <время> <причина> [-s] - забанить игрока\n" +
+                "!rcon global mute <ник> <время> <причина> [-s] - замутить игрока\n" +
+                "!rcon global kick <ник> <причина> [-s] - кикнуть игрока\n" +
+                "!rcon global unban <ник> - разбанить игрока\n" +
+                "!rcon global unmute <ник> - размутить игрока\n" +
+                "!rcon global banip <ник> <время> <причина> [-s] - забанить IP игрока\n" +
+                "!rcon global checkban <ник> - проверить бан\n" +
+                "!rcon global checkmute <ник> - проверить мут\n" +
+                "!rcon global banlist - список банов\n" +
+                "!rcon global mutelist - список мутов\n" +
+                "!rcon global logs <ник> [кол-во] - логи команд\n" +
+                "!rcon global hist <ник> [кол-во] - история наказаний игрока\n" +
+                "!rcon global shist <ник> [кол-во] - наказания выданные игроком\n" +
+                "!rcon global dupeip <ник> - поиск по IP\n" +
+                "!rcon global pex user <ник> - информация об игроке\n" +
+                "!rcon global bc <текст> - объявление в чат\n\n" +
+                "В чатах с собеседниками используйте:\n" +
+                ".rcon <команда> - выполнить RCON команду (команда удаляется автоматически)";
         sendMessage(chatId, msg);
     }
 
@@ -847,9 +1261,13 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
     }
 
+    // ================================================================
+    // ОСТАВШИЕСЯ МЕТОДЫ (БЕЗ ИЗМЕНЕНИЙ)
+    // ================================================================
+
     private void handleRconCommand(long chatId, String cmd, long userId) {
         if (cmd.isEmpty()) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon <команда> (в ЛС) или !rcon global <команда> (в группе)");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global <команда>");
             return;
         }
 
@@ -923,7 +1341,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleLogs(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon logs <ник> [кол-во]");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global logs <ник> [кол-во]");
             return;
         }
 
@@ -942,7 +1360,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleShist(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon shist <ник> [кол-во]");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global shist <ник> [кол-во]");
             return;
         }
 
@@ -961,7 +1379,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleHist(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon hist <ник> [кол-во]");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global hist <ник> [кол-во]");
             return;
         }
 
@@ -980,7 +1398,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleDupeip(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon dupeip <ник>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global dupeip <ник>");
             return;
         }
 
@@ -1010,7 +1428,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handlePexUser(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 3) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon pex user <ник>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global pex user <ник>");
             return;
         }
 
@@ -1078,7 +1496,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleBroadcast(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon bc <сообщение>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global bc <сообщение>");
             return;
         }
 
@@ -1205,7 +1623,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleCheckBan(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon checkban <ник>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global checkban <ник>");
             return;
         }
         String playerName = parts[1];
@@ -1240,7 +1658,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleCheckMute(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon checkmute <ник>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global checkmute <ник>");
             return;
         }
         String playerName = parts[1];
@@ -1275,7 +1693,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleBanIp(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 4) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon banip <ник> <время> <причина> [-s]");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global banip <ник> <время> <причина> [-s]");
             return;
         }
 
@@ -1310,7 +1728,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleUnbanIp(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 3) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon unbanip <ник> <причина>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global unbanip <ник> <причина>");
             return;
         }
 
@@ -1350,7 +1768,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             }
             response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
             if (totalPages > 1) {
-                response.append("Используй: !rcon banlist ").append(page + 1);
+                response.append("Используй: !rcon global banlist ").append(page + 1);
             }
             sendMessage(chatId, response.toString());
         }
@@ -1378,7 +1796,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             }
             response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
             if (totalPages > 1) {
-                response.append("Используй: !rcon mutelist ").append(page + 1);
+                response.append("Используй: !rcon global mutelist ").append(page + 1);
             }
             sendMessage(chatId, response.toString());
         }
