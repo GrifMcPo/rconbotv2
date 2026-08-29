@@ -111,8 +111,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         long userId = update.getMessage().getFrom().getId();
         long chatId = update.getMessage().getChatId();
 
+        // ⭐ ПРОВЕРКА: Это ЛИЧНЫЙ чат с ботом?
+        boolean isPrivateChat = update.getMessage().isUserMessage();
+
         saveKnownUser(userId);
-        plugin.getLogger().info("Получено: " + messageText + " от " + userId);
+        plugin.getLogger().info("Получено: " + messageText + " от " + userId + " (чат: " + (isPrivateChat ? "ЛС" : "группа") + ")");
 
         if (botBanManager.isBanned(userId)) {
             sendMessage(chatId, botBanManager.getBanMessage(userId));
@@ -165,21 +168,64 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        if (!messageText.startsWith("!rcon global ")) {
-            if (messageText.startsWith("!")) {
-                sendMessage(chatId, "[БОТ] Неизвестная команда. Введите /помощь для списка команд.");
+        // ================================================================
+        // ⭐⭐⭐ ОСНОВНАЯ ЛОГИКА ДЛЯ !rcon КОМАНД (ИСПРАВЛЕНА) ⭐⭐⭐
+        // ================================================================
+
+        // Если команда начинается с !rcon
+        if (messageText.startsWith("!rcon")) {
+            // Для ЛИЧНЫХ чатов — разрешаем без "global"
+            if (isPrivateChat) {
+                // Убираем "!rcon " из начала
+                String cmd = messageText.substring(6).trim();
+                if (cmd.isEmpty()) {
+                    sendMessage(chatId, "[БОТ] Использование: !rcon <команда> (например: !rcon ban Steve 1d Спам)");
+                    return;
+                }
+
+                // Проверяем доступ
+                String userGroup = groupManager.getUserGroup(userId);
+                if (userGroup == null && !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+                    sendMessage(chatId, "[БОТ] У Вас нет доступа к боту!");
+                    return;
+                }
+
+                handleRconCommand(chatId, cmd, userId);
+                return;
             }
-            return;
+
+            // Для ГРУППОВЫХ чатов — требуем "global"
+            if (!isPrivateChat) {
+                if (!messageText.startsWith("!rcon global ")) {
+                    sendMessage(chatId, "[БОТ] В группе используйте: !rcon global <команда>");
+                    return;
+                }
+
+                String userGroup = groupManager.getUserGroup(userId);
+                if (userGroup == null && !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+                    sendMessage(chatId, "[БОТ] У Вас нет доступа к боту!");
+                    return;
+                }
+
+                handleRconCommand(chatId, messageText.substring(13).trim(), userId);
+                return;
+            }
         }
 
-        String userGroup = groupManager.getUserGroup(userId);
-        if (userGroup == null && !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
-            sendMessage(chatId, "[БОТ] У Вас нет доступа к боту!");
-            return;
-        }
+        // ================================================================
+        // КОНЕЦ БЛОКА С !rcon
+        // ================================================================
 
-        handleRconCommand(chatId, messageText.substring(13).trim(), userId);
+        // Если команда начинается с "!" и не была обработана выше
+        if (messageText.startsWith("!")) {
+            sendMessage(chatId, "[БОТ] Неизвестная команда. Введите /помощь для списка команд.");
+        }
     }
+
+    // ===================================================================
+    // ВСЕ ОСТАЛЬНЫЕ МЕТОДЫ ОСТАЮТСЯ БЕЗ ИЗМЕНЕНИЙ
+    // (от sendStartMessage до deleteMessage)
+    // ===================================================================
 
     private void handleCallbackQuery(Update update) {
         String data = update.getCallbackQuery().getData();
@@ -248,22 +294,24 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
     private void sendHelp2(long chatId) {
         String msg = "[БОТ] Помощь по RCON командам:\n\n" +
-                "!rcon global ban <ник> <время> <причина> [-s] - забанить игрока\n" +
-                "!rcon global mute <ник> <время> <причина> [-s] - замутить игрока\n" +
-                "!rcon global kick <ник> <причина> [-s] - кикнуть игрока\n" +
-                "!rcon global unban <ник> - разбанить игрока\n" +
-                "!rcon global unmute <ник> - размутить игрока\n" +
-                "!rcon global banip <ник> <время> <причина> [-s] - забанить IP игрока\n" +
-                "!rcon global checkban <ник> - проверить бан\n" +
-                "!rcon global checkmute <ник> - проверить мут\n" +
-                "!rcon global banlist - список банов\n" +
-                "!rcon global mutelist - список мутов\n" +
-                "!rcon global logs <ник> [кол-во] - логи команд\n" +
-                "!rcon global hist <ник> [кол-во] - история наказаний игрока\n" +
-                "!rcon global shist <ник> [кол-во] - наказания выданные игроком\n" +
-                "!rcon global dupeip <ник> - поиск по IP\n" +
-                "!rcon global pex user <ник> - информация об игроке\n" +
-                "!rcon global bc <текст> - объявление в чат";
+                "В ЛИЧНЫХ СООБЩЕНИЯХ (ЛС):\n" +
+                "!rcon ban <ник> <время> <причина> [-s] - забанить игрока\n" +
+                "!rcon mute <ник> <время> <причина> [-s] - замутить игрока\n" +
+                "!rcon kick <ник> <причина> [-s] - кикнуть игрока\n" +
+                "!rcon unban <ник> - разбанить игрока\n" +
+                "!rcon unmute <ник> - размутить игрока\n" +
+                "!rcon banip <ник> <время> <причина> [-s] - забанить IP игрока\n" +
+                "!rcon checkban <ник> - проверить бан\n" +
+                "!rcon checkmute <ник> - проверить мут\n" +
+                "!rcon banlist - список банов\n" +
+                "!rcon mutelist - список мутов\n" +
+                "!rcon logs <ник> [кол-во] - логи команд\n" +
+                "!rcon hist <ник> [кол-во] - история наказаний игрока\n" +
+                "!rcon shist <ник> [кол-во] - наказания выданные игроком\n" +
+                "!rcon dupeip <ник> - поиск по IP\n" +
+                "!rcon pex user <ник> - информация об игроке\n" +
+                "!rcon bc <текст> - объявление в чат\n\n" +
+                "В ГРУППОВЫХ ЧАТАХ используйте: !rcon global <команда>";
         sendMessage(chatId, msg);
     }
 
@@ -530,13 +578,14 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
     private void handleRconCommand(long chatId, String cmd, long userId) {
         if (cmd.isEmpty()) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global <команда>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon <команда> (в ЛС) или !rcon global <команда> (в группе)");
             return;
         }
 
         String cmdName = cmd.split(" ")[0];
         String fullCommand = "!rcon global " + cmdName;
 
+        // Проверка доступа к конкретной команде
         if (!groupManager.hasPermission(userId, fullCommand) &&
                 !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
             sendMessage(chatId, "[БОТ] У вас нет доступа к данной команде!");
@@ -544,6 +593,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
+        // --- Обработка конкретных команд ---
         if (cmd.startsWith("logs ")) {
             handleLogs(chatId, cmd, userId);
             return;
@@ -598,13 +648,14 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
+        // Если команда не распознана, выполняем как есть на сервере
         executeServerCommand(chatId, cmd, userId);
     }
 
     private void handleLogs(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global logs <ник> [кол-во]");
+            sendMessage(chatId, "[БОТ] Использование: !rcon logs <ник> [кол-во]");
             return;
         }
 
@@ -623,7 +674,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleShist(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global shist <ник> [кол-во]");
+            sendMessage(chatId, "[БОТ] Использование: !rcon shist <ник> [кол-во]");
             return;
         }
 
@@ -642,7 +693,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleHist(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global hist <ник> [кол-во]");
+            sendMessage(chatId, "[БОТ] Использование: !rcon hist <ник> [кол-во]");
             return;
         }
 
@@ -661,7 +712,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleDupeip(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global dupeip <ник>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon dupeip <ник>");
             return;
         }
 
@@ -691,7 +742,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handlePexUser(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 3) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global pex user <ник>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon pex user <ник>");
             return;
         }
 
@@ -759,7 +810,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleBroadcast(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global bc <сообщение>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon bc <сообщение>");
             return;
         }
 
@@ -886,7 +937,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleCheckBan(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global checkban <ник>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon checkban <ник>");
             return;
         }
         String playerName = parts[1];
@@ -921,7 +972,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleCheckMute(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global checkmute <ник>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon checkmute <ник>");
             return;
         }
         String playerName = parts[1];
@@ -956,7 +1007,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleBanIp(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 4) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global banip <ник> <время> <причина> [-s]");
+            sendMessage(chatId, "[БОТ] Использование: !rcon banip <ник> <время> <причина> [-s]");
             return;
         }
 
@@ -991,7 +1042,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleUnbanIp(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 3) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global unbanip <ник> <причина>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon unbanip <ник> <причина>");
             return;
         }
 
@@ -1031,7 +1082,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             }
             response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
             if (totalPages > 1) {
-                response.append("Используй: !rcon global banlist ").append(page + 1);
+                response.append("Используй: !rcon banlist ").append(page + 1);
             }
             sendMessage(chatId, response.toString());
         }
@@ -1059,7 +1110,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             }
             response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
             if (totalPages > 1) {
-                response.append("Используй: !rcon global mutelist ").append(page + 1);
+                response.append("Используй: !rcon mutelist ").append(page + 1);
             }
             sendMessage(chatId, response.toString());
         }
