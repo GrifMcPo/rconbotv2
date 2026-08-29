@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot;  
+package com.grifmcpo.consolebot;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
@@ -28,6 +28,10 @@ public class TelegramConsoleBot extends JavaPlugin {
     private AuthManager authManager;
     private TelegramBotHandler botHandler;
     private AuthListener authListener;
+
+    // ⭐ ДЛЯ ОТСЛЕЖИВАНИЯ БИЗНЕС-СООБЩЕНИЙ
+    public int businessMessagesReceived = 0;
+    public String lastConnectionId = null;
 
     @Override
     public void onEnable() {
@@ -80,6 +84,9 @@ public class TelegramConsoleBot extends JavaPlugin {
                     commandExecutor, punishmentManager, botBanManager, groupManager, authManager);
             botsApi.registerBot(botHandler);
             getLogger().info("Telegram-бот успешно зарегистрирован!");
+            getLogger().info("📌 Версия библиотеки: 6.9.7.1 (поддерживает Business API)");
+            getLogger().info("💡 Для бизнес-команд используйте: .rcon <команда>");
+            getLogger().info("🧪 Для проверки бизнес-API используйте: .test");
         } catch (TelegramApiException e) {
             getLogger().severe("Ошибка при регистрации бота: " + e.getMessage());
             e.printStackTrace();
