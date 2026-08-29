@@ -6,7 +6,6 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.message.BusinessMessage;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -52,9 +51,10 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         loadKnownUsers();
         
         plugin.getLogger().info("🤖 TelegramBotHandler инициализирован!");
-        plugin.getLogger().info("📌 Версия библиотеки: 6.9.7.1 (поддерживает Business API)");
+        plugin.getLogger().info("📌 Версия библиотеки: 6.9.7.1");
         plugin.getLogger().info("💡 Для бизнес-команд используйте: .rcon <команда>");
         plugin.getLogger().info("🧪 Для проверки бизнес-API используйте: .test");
+        plugin.getLogger().info("📋 Для просмотра статуса бизнес-API: /console в ЛС");
     }
 
     private void loadHiddenViewers() {
@@ -108,21 +108,20 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     public void onUpdateReceived(Update update) {
         // Логируем ВСЁ, что приходит
         plugin.getLogger().info("🔍 === НОВОЕ ОБНОВЛЕНИЕ ===");
-        plugin.getLogger().info("🔍 Тип: " + update.getClass().getSimpleName());
         
-        // Проверяем, есть ли бизнес-сообщение
-        if (update.hasBusinessMessage()) {
-            plugin.getLogger().info("✅ update.hasBusinessMessage() = TRUE!");
-            BusinessMessage businessMessage = update.getBusinessMessage();
-            if (businessMessage != null) {
-                plugin.getLogger().info("📩 БИЗНЕС-СООБЩЕНИЕ ПОЛУЧЕНО!");
-                handleBusinessMessage(businessMessage);
-                return;
-            } else {
-                plugin.getLogger().info("⚠️ businessMessage = null");
-            }
+        // Проверяем, есть ли бизнес-сообщение (используем сырой JSON)
+        String json = update.toString();
+        boolean hasBusiness = json.contains("\"business_message\"") || json.contains("\"business_connection_id\"");
+        
+        if (hasBusiness) {
+            plugin.getLogger().info("✅ Обнаружено бизнес-сообщение!");
+            plugin.businessMessagesReceived++;
+            
+            // Парсим вручную через простой поиск
+            handleBusinessMessageRaw(update);
+            return;
         } else {
-            plugin.getLogger().info("❌ update.hasBusinessMessage() = FALSE");
+            plugin.getLogger().info("❌ Бизнес-сообщения нет");
         }
 
         // Проверяем, есть ли callback-запрос
@@ -134,7 +133,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         // Проверяем, есть ли обычное сообщение
         if (!update.hasMessage()) {
-            plugin.getLogger().info("⏭️ Нет сообщения (ни бизнес, ни обычного)");
+            plugin.getLogger().info("⏭️ Нет сообщения");
             return;
         }
 
@@ -223,42 +222,40 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     }
 
     // ================================================================
-    // ⭐ КОМАНДА /console — ПОКАЗЫВАЕТ СТАТУС BUSINESS API
+    // ⭐ ОБРАБОТКА БИЗНЕС-СООБЩЕНИЙ (ЧЕРЕЗ СЫРОЙ JSON)
     // ================================================================
 
-    private void sendConsoleLogs(long chatId) {
-        String msg = "[БОТ] 📋 === СТАТУС BUSINESS API ===\n\n" +
-                "🔍 Версия библиотеки: 6.9.7.1\n" +
-                "📌 Поддержка Business API: ДА\n" +
-                "📩 Бизнес-сообщения получены: " + (plugin.businessMessagesReceived > 0 ? "✅ ДА (" + plugin.businessMessagesReceived + ")" : "❌ НЕТ") + "\n" +
-                "🔗 business_connection_id: " + (plugin.lastConnectionId != null ? "✅ " + plugin.lastConnectionId : "❌ НЕТ") + "\n\n" +
-                "💡 Для проверки:\n" +
-                "1. Напишите .test в чате с собеседником\n" +
-                "2. Посмотрите логи сервера\n" +
-                "3. Если в логах нет 'БИЗНЕС-СООБЩЕНИЕ' — проблема в Telegram API";
-        sendMessage(chatId, msg);
-    }
-
-    // ================================================================
-    // ⭐ ОБРАБОТКА БИЗНЕС-СООБЩЕНИЙ
-    // ================================================================
-
-    private void handleBusinessMessage(BusinessMessage businessMessage) {
+    private void handleBusinessMessageRaw(Update update) {
         try {
-            plugin.businessMessagesReceived++;
-            plugin.getLogger().info("✅✅✅ handleBusinessMessage() ВЫЗВАН! ✅✅✅");
+            String json = update.toString();
+            plugin.getLogger().info("📄 RAW JSON (первые 300 символов): " + json.substring(0, Math.min(300, json.length())) + "...");
             
-            String text = businessMessage.getText();
+            // Ищем текст сообщения
+            String text = extractTextFromJson(json);
             if (text == null || text.trim().isEmpty()) {
                 plugin.getLogger().info("⏭️ Пустое сообщение");
                 return;
             }
 
-            long userId = businessMessage.getFrom().getId();
-            long chatId = businessMessage.getChat().getId();
-            int messageId = businessMessage.getMessageId();
-            String connectionId = businessMessage.getBusinessConnectionId();
+            // Ищем userId
+            long userId = extractUserIdFromJson(json);
+            if (userId == 0) {
+                plugin.getLogger().info("⚠️ Не удалось найти userId");
+                return;
+            }
+
+            // Ищем chatId
+            long chatId = extractChatIdFromJson(json);
+            if (chatId == 0) {
+                plugin.getLogger().info("⚠️ Не удалось найти chatId");
+                return;
+            }
+
+            // Ищем messageId
+            int messageId = extractMessageIdFromJson(json);
             
+            // Ищем connectionId
+            String connectionId = extractConnectionIdFromJson(json);
             if (connectionId != null && !connectionId.isEmpty()) {
                 plugin.lastConnectionId = connectionId;
             }
@@ -357,6 +354,96 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     }
 
     // ================================================================
+    // ⭐ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ДЛЯ ПАРСИНГА JSON
+    // ================================================================
+
+    private String extractTextFromJson(String json) {
+        try {
+            int idx = json.indexOf("\"text\":\"");
+            if (idx == -1) return null;
+            int start = idx + 8;
+            int end = json.indexOf("\"", start);
+            if (end == -1) return null;
+            return json.substring(start, end).replace("\\\"", "\"");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private long extractUserIdFromJson(String json) {
+        try {
+            int idx = json.indexOf("\"from\":{\"id\":");
+            if (idx == -1) return 0;
+            int start = idx + 13;
+            int end = json.indexOf(",", start);
+            if (end == -1) end = json.indexOf("}", start);
+            if (end == -1) return 0;
+            return Long.parseLong(json.substring(start, end));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private long extractChatIdFromJson(String json) {
+        try {
+            int idx = json.indexOf("\"chat\":{\"id\":");
+            if (idx == -1) return 0;
+            int start = idx + 12;
+            int end = json.indexOf(",", start);
+            if (end == -1) end = json.indexOf("}", start);
+            if (end == -1) return 0;
+            return Long.parseLong(json.substring(start, end));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private int extractMessageIdFromJson(String json) {
+        try {
+            int idx = json.indexOf("\"message_id\":");
+            if (idx == -1) return 0;
+            int start = idx + 13;
+            int end = json.indexOf(",", start);
+            if (end == -1) end = json.indexOf("}", start);
+            if (end == -1) return 0;
+            return Integer.parseInt(json.substring(start, end));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private String extractConnectionIdFromJson(String json) {
+        try {
+            int idx = json.indexOf("\"business_connection_id\":\"");
+            if (idx == -1) return null;
+            int start = idx + 26;
+            int end = json.indexOf("\"", start);
+            if (end == -1) return null;
+            return json.substring(start, end);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // ================================================================
+    // ⭐ КОМАНДА /console — ПОКАЗЫВАЕТ СТАТУС BUSINESS API
+    // ================================================================
+
+    private void sendConsoleLogs(long chatId) {
+        String msg = "[БОТ] 📋 === СТАТУС BUSINESS API ===\n\n" +
+                "🔍 Версия библиотеки: 6.9.7.1\n" +
+                "📌 Поддержка Business API: ДА\n" +
+                "📩 Бизнес-сообщений получено: " + plugin.businessMessagesReceived + "\n" +
+                "🔗 Последний connectionId: " + (plugin.lastConnectionId != null ? "✅ " + plugin.lastConnectionId : "❌ НЕ ПОЛУЧЕН") + "\n\n" +
+                "💡 Для проверки:\n" +
+                "1. Напишите .test в чате с собеседником\n" +
+                "2. Посмотрите логи сервера\n" +
+                "3. Если в логах нет 'БИЗНЕС-СООБЩЕНИЕ' — бот не получает бизнес-сообщения от Telegram\n" +
+                "4. Проверьте подключение бота в настройках Telegram Business";
+        sendMessage(chatId, msg);
+    }
+
+    // ================================================================
     // ⭐ МЕТОДЫ BUSINESS API
     // ================================================================
 
@@ -385,11 +472,20 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 return;
             }
 
-            SendMessage message = new SendMessage();
-            message.setChatId(String.valueOf(chatId));
-            message.setText(text);
-            message.setBusinessConnectionId(connectionId);
-            execute(message);
+            String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
+            String escapedText = text.replace("\\", "\\\\")
+                                     .replace("\"", "\\\"")
+                                     .replace("\n", "\\n");
+            
+            String json = "{\"chat_id\":\"" + chatId + "\",\"text\":\"" + escapedText + "\",\"business_connection_id\":\"" + connectionId + "\"}";
+            
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(url))
+                    .header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            
+            java.net.http.HttpClient.newHttpClient().send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
             plugin.getLogger().info("📤 Бизнес-ответ отправлен в чат " + chatId);
         } catch (Exception e) {
             plugin.getLogger().warning("⚠️ Ошибка отправки бизнес-сообщения: " + e.getMessage());
