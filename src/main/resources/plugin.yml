@@ -7,65 +7,97 @@ description: Telegram Console Bot with Auth System
 
 commands:
   ban:
-    description: Забанить игрока
-    usage: /ban <ник> <время> <причина> [-s]
+    description: Ban a player
     permission: telegramconsolebot.ban
+    usage: /ban <player> [time] <reason> [-s]
+  banuuid:
+    description: Ban by UUID
+    permission: telegramconsolebot.ban
+    usage: /banuuid <uuid> [time] <reason> [-s]
   mute:
-    description: Замутить игрока
-    usage: /mute <ник> <время> <причина> [-s]
+    description: Mute a player
     permission: telegramconsolebot.mute
+    usage: /mute <player> [time] <reason> [-s]
   kick:
-    description: Кикнуть игрока
-    usage: /kick <ник> <причина> [-s]
+    description: Kick a player
     permission: telegramconsolebot.kick
+    usage: /kick <player> <reason> [-s]
+  warn:
+    description: Warn a player
+    permission: telegramconsolebot.warn
+    usage: /warn <player> <reason> [-s]
+  unwarn:
+    description: Remove warning from a player
+    permission: telegramconsolebot.warn
+    usage: /unwarn <player> <reason>
   bc:
-    description: Объявление в чат
-    usage: /bc <сообщение>
+    description: Broadcast a message
     permission: telegramconsolebot.bc
+    usage: /bc <message>
   logs:
-    description: Логи команд игрока
-    usage: /logs <ник> [кол-во]
+    description: View player command logs
     permission: telegramconsolebot.logs
+    usage: /logs <player> [amount]
   hist:
-    description: История наказаний игрока
-    usage: /hist <ник> [кол-во]
+    description: View player punishment history
     permission: telegramconsolebot.hist
+    usage: /hist <player> [amount]
   shist:
-    description: Наказания выданные игроком
-    usage: /shist <ник> [кол-во]
+    description: View punishments issued by a player
     permission: telegramconsolebot.shists
+    usage: /shist <player> [amount]
   dupeip:
-    description: Поиск аккаунтов по IP
-    usage: /dupeip <ник>
+    description: Find players with same IP
     permission: telegramconsolebot.dupeip
-  tg:
-    description: Получить код для привязки Telegram
-    usage: /tg
-    permission: telegramconsolebot.tg
-  untgm:
-    description: Отвязать аккаунт от Telegram
-    usage: /untgm <ник>
-    permission: telegramconsolebot.unlink
-    aliases: [unlinktg]
+    usage: /dupeip <player>
+  pex:
+    description: Check player info
+    permission: telegramconsolebot.pex
+    usage: /pex user <player>
 
 permissions:
+  telegramconsolebot.admin:
+    description: All admin permissions
+    default: op
+    children:
+      telegramconsolebot.ban: true
+      telegramconsolebot.mute: true
+      telegramconsolebot.kick: true
+      telegramconsolebot.warn: true
+      telegramconsolebot.bc: true
+      telegramconsolebot.logs: true
+      telegramconsolebot.hist: true
+      telegramconsolebot.shists: true
+      telegramconsolebot.dupeip: true
+      telegramconsolebot.pex: true
+  
   telegramconsolebot.ban:
+    description: Ban permission
     default: op
   telegramconsolebot.mute:
+    description: Mute permission
     default: op
   telegramconsolebot.kick:
+    description: Kick permission
+    default: op
+  telegramconsolebot.warn:
+    description: Warn permission
     default: op
   telegramconsolebot.bc:
+    description: Broadcast permission
     default: op
   telegramconsolebot.logs:
+    description: View logs
     default: op
   telegramconsolebot.hist:
+    description: View history
     default: op
   telegramconsolebot.shists:
+    description: View issued punishments
     default: op
   telegramconsolebot.dupeip:
+    description: Dupe IP check
     default: op
-  telegramconsolebot.tg:
-    default: true
-  telegramconsolebot.unlink:
+  telegramconsolebot.pex:
+    description: PEX check permission
     default: op
