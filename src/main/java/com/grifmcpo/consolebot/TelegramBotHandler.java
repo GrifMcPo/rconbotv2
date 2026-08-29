@@ -11,6 +11,10 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -100,22 +104,27 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
+        // Обработка callback-запросов (кнопки)
         if (update.hasCallbackQuery()) {
             handleCallbackQuery(update);
             return;
         }
 
+        // ⭐ НОВОЕ: Обработка бизнес-сообщений (из чатов с собеседниками)
+        if (update.hasBusinessMessage()) {
+            handleBusinessMessage(update);
+            return;
+        }
+
+        // Обычные сообщения (ЛС с ботом, группы)
         if (!update.hasMessage() || !update.getMessage().hasText()) return;
 
         String messageText = update.getMessage().getText().trim();
         long userId = update.getMessage().getFrom().getId();
         long chatId = update.getMessage().getChatId();
 
-        // ⭐ ПРОВЕРКА: Это ЛИЧНЫЙ чат с ботом?
-        boolean isPrivateChat = update.getMessage().isUserMessage();
-
         saveKnownUser(userId);
-        plugin.getLogger().info("Получено: " + messageText + " от " + userId + " (чат: " + (isPrivateChat ? "ЛС" : "группа") + ")");
+        plugin.getLogger().info("Получено: " + messageText + " от " + userId);
 
         if (botBanManager.isBanned(userId)) {
             sendMessage(chatId, botBanManager.getBanMessage(userId));
@@ -168,53 +177,42 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        // ================================================================
-        // ⭐⭐⭐ ОСНОВНАЯ ЛОГИКА ДЛЯ !rcon КОМАНД (ИСПРАВЛЕНА) ⭐⭐⭐
-        // ================================================================
-
-        // Если команда начинается с !rcon
+        // === ПРОВЕРКА ДЛЯ !rcon КОМАНД (с поддержкой ЛС) ===
         if (messageText.startsWith("!rcon")) {
-            // Для ЛИЧНЫХ чатов — разрешаем без "global"
-            if (isPrivateChat) {
-                // Убираем "!rcon " из начала
-                String cmd = messageText.substring(6).trim();
-                if (cmd.isEmpty()) {
-                    sendMessage(chatId, "[БОТ] Использование: !rcon <команда> (например: !rcon ban Steve 1d Спам)");
-                    return;
-                }
+            // Определяем тип чата
+            boolean isGroup = update.getMessage().isGroupMessage() || update.getMessage().isSuperGroupMessage();
 
-                // Проверяем доступ
-                String userGroup = groupManager.getUserGroup(userId);
-                if (userGroup == null && !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
-                    sendMessage(chatId, "[БОТ] У Вас нет доступа к боту!");
-                    return;
-                }
-
-                handleRconCommand(chatId, cmd, userId);
-                return;
-            }
-
-            // Для ГРУППОВЫХ чатов — требуем "global"
-            if (!isPrivateChat) {
+            // Если это ГРУППА — проверяем наличие "global"
+            if (isGroup) {
                 if (!messageText.startsWith("!rcon global ")) {
                     sendMessage(chatId, "[БОТ] В группе используйте: !rcon global <команда>");
                     return;
                 }
-
                 String userGroup = groupManager.getUserGroup(userId);
                 if (userGroup == null && !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
                     sendMessage(chatId, "[БОТ] У Вас нет доступа к боту!");
                     return;
                 }
-
                 handleRconCommand(chatId, messageText.substring(13).trim(), userId);
                 return;
             }
-        }
 
-        // ================================================================
-        // КОНЕЦ БЛОКА С !rcon
-        // ================================================================
+            // Если это ЛИЧНЫЙ ЧАТ с ботом — разрешаем без "global"
+            if (!isGroup) {
+                String cmd = messageText.substring(6).trim(); // убираем "!rcon "
+                if (cmd.isEmpty()) {
+                    sendMessage(chatId, "[БОТ] Использование: !rcon <команда> (например: !rcon ban Steve 1d Спам)");
+                    return;
+                }
+                String userGroup = groupManager.getUserGroup(userId);
+                if (userGroup == null && !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+                    sendMessage(chatId, "[БОТ] У Вас нет доступа к боту!");
+                    return;
+                }
+                handleRconCommand(chatId, cmd, userId);
+                return;
+            }
+        }
 
         // Если команда начинается с "!" и не была обработана выше
         if (messageText.startsWith("!")) {
@@ -222,10 +220,135 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
     }
 
-    // ===================================================================
-    // ВСЕ ОСТАЛЬНЫЕ МЕТОДЫ ОСТАЮТСЯ БЕЗ ИЗМЕНЕНИЙ
-    // (от sendStartMessage до deleteMessage)
-    // ===================================================================
+    // ================================================================
+    // ⭐ НОВЫЙ БЛОК: ОБРАБОТКА БИЗНЕС-СООБЩЕНИЙ (ЧАТЫ С СОБЕСЕДНИКАМИ)
+    // ================================================================
+
+    /**
+     * Обработка сообщений из бизнес-чатов (чаты с собеседниками)
+     */
+    private void handleBusinessMessage(Update update) {
+        var businessMessage = update.getBusinessMessage();
+        if (businessMessage == null) return;
+
+        String messageText = businessMessage.getText();
+        if (messageText == null || messageText.trim().isEmpty()) return;
+
+        String text = messageText.trim();
+        long userId = businessMessage.getFrom().getId();
+        long chatId = businessMessage.getChat().getId();
+        int messageId = businessMessage.getMessageId();
+        String connectionId = businessMessage.getBusinessConnectionId();
+
+        plugin.getLogger().info("📩 Бизнес-сообщение от " + userId + ": " + text);
+
+        // Проверка: только админы могут использовать команды
+        if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+            plugin.getLogger().info("⛔ Не админ: " + userId);
+            return;
+        }
+
+        // Проверка: команда должна начинаться с "."
+        if (!text.startsWith(".")) {
+            return;
+        }
+
+        // Проверка: есть ли connection_id
+        if (connectionId == null || connectionId.isEmpty()) {
+            plugin.getLogger().warning("❌ Нет business_connection_id для " + userId);
+            sendBusinessMessage(chatId, "[БОТ] Ошибка: нет подключения к бизнес-аккаунту!", connectionId);
+            return;
+        }
+
+        // ⭐ Удаляем сообщение с командой (чтобы собеседник не видел)
+        deleteBusinessMessage(connectionId, messageId);
+
+        // Убираем точку из начала команды
+        String cmd = text.substring(1).trim();
+
+        // Обрабатываем команду
+        handleBusinessCommand(chatId, cmd, userId, connectionId);
+    }
+
+    /**
+     * Обрабатывает команды из бизнес-чатов (с префиксом ".")
+     */
+    private void handleBusinessCommand(long chatId, String cmd, long userId, String connectionId) {
+        plugin.getLogger().info("⚙️ Бизнес-команда: " + cmd + " от " + userId);
+
+        // Проверяем, есть ли у пользователя права на RCON-команды
+        if (!groupManager.hasPermission(userId, "!rcon global") &&
+                !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+            sendBusinessMessage(chatId, "[БОТ] У вас нет доступа к этой команде!", connectionId);
+            return;
+        }
+
+        // Убираем "rcon" из начала, если есть
+        String rconCmd = cmd;
+        if (cmd.startsWith("rcon ")) {
+            rconCmd = cmd.substring(5).trim();
+        } else {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon <команда> (например: .rcon ban Steve 1d Спам)", connectionId);
+            return;
+        }
+
+        if (rconCmd.isEmpty()) {
+            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon <команда>", connectionId);
+            return;
+        }
+
+        // Выполняем RCON-команду (используем существующий метод)
+        String finalRconCmd = rconCmd;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            String response = commandExecutor.executeCommand(finalRconCmd, "Telegram@" + userId);
+            if (response == null || response.isEmpty()) {
+                response = "✅ Команда выполнена!";
+            }
+            sendBusinessMessage(chatId, "[БОТ] Ответ:\n" + response, connectionId);
+        });
+    }
+
+    /**
+     * Удаляет сообщение из бизнес-чата (чтобы собеседник не видел команду)
+     */
+    private void deleteBusinessMessage(String connectionId, int messageId) {
+        try {
+            String url = "https://api.telegram.org/bot" + botToken + "/deleteBusinessMessages";
+            String json = "{\"business_connection_id\":\"" + connectionId + "\",\"message_ids\":[" + messageId + "]}";
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            
+            HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+            plugin.getLogger().info("🗑️ Удалено бизнес-сообщение: " + messageId);
+        } catch (Exception e) {
+            plugin.getLogger().warning("⚠️ Не удалось удалить сообщение: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Отправляет сообщение в бизнес-чат (от имени бизнес-аккаунта)
+     */
+    private void sendBusinessMessage(long chatId, String text, String connectionId) {
+        try {
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(text);
+            if (connectionId != null && !connectionId.isEmpty()) {
+                message.setBusinessConnectionId(connectionId);
+            }
+            execute(message);
+        } catch (TelegramApiException e) {
+            plugin.getLogger().warning("⚠️ Ошибка отправки бизнес-сообщения: " + e.getMessage());
+        }
+    }
+
+    // ================================================================
+    // КОНЕЦ БЛОКА БИЗНЕС-СООБЩЕНИЙ
+    // ================================================================
 
     private void handleCallbackQuery(Update update) {
         String data = update.getCallbackQuery().getData();
@@ -288,13 +411,15 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 "/отвязать - подать заявку на отвязку аккаунта\n" +
                 "/привязать <ник> <код> - привязать аккаунт\n" +
                 "/помощь2 - помощь по RCON командам\n" +
-                "/id - показать ваш Telegram ID";
+                "/id - показать ваш Telegram ID\n\n" +
+                "В чатах с собеседниками используйте:\n" +
+                ".rcon <команда> - выполнить RCON команду";
         sendMessage(chatId, msg);
     }
 
     private void sendHelp2(long chatId) {
         String msg = "[БОТ] Помощь по RCON командам:\n\n" +
-                "В ЛИЧНЫХ СООБЩЕНИЯХ (ЛС):\n" +
+                "В ЛИЧНЫХ СООБЩЕНИЯХ (ЛС с ботом):\n" +
                 "!rcon ban <ник> <время> <причина> [-s] - забанить игрока\n" +
                 "!rcon mute <ник> <время> <причина> [-s] - замутить игрока\n" +
                 "!rcon kick <ник> <причина> [-s] - кикнуть игрока\n" +
@@ -311,7 +436,24 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 "!rcon dupeip <ник> - поиск по IP\n" +
                 "!rcon pex user <ник> - информация об игроке\n" +
                 "!rcon bc <текст> - объявление в чат\n\n" +
-                "В ГРУППОВЫХ ЧАТАХ используйте: !rcon global <команда>";
+                "В ГРУППОВЫХ ЧАТАХ используйте: !rcon global <команда>\n\n" +
+                "В ЧАТАХ С СОБЕСЕДНИКАМИ (Business API):\n" +
+                ".rcon ban <ник> <время> <причина> [-s] - забанить игрока\n" +
+                ".rcon mute <ник> <время> <причина> [-s] - замутить игрока\n" +
+                ".rcon kick <ник> <причина> [-s] - кикнуть игрока\n" +
+                ".rcon checkban <ник> - проверить бан\n" +
+                ".rcon checkmute <ник> - проверить мут\n" +
+                ".rcon banlist - список банов\n" +
+                ".rcon mutelist - список мутов\n" +
+                ".rcon logs <ник> [кол-во] - логи команд\n" +
+                ".rcon hist <ник> [кол-во] - история наказаний игрока\n" +
+                ".rcon shist <ник> [кол-во] - наказания выданные игроком\n" +
+                ".rcon dupeip <ник> - поиск по IP\n" +
+                ".rcon pex user <ник> - информация об игроке\n" +
+                ".rcon bc <текст> - объявление в чат\n" +
+                ".rcon unban <ник> - разбанить игрока\n" +
+                ".rcon unmute <ник> - размутить игрока\n\n" +
+                "💡 Команда удаляется автоматически, собеседник её не видит!";
         sendMessage(chatId, msg);
     }
 
@@ -585,7 +727,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String cmdName = cmd.split(" ")[0];
         String fullCommand = "!rcon global " + cmdName;
 
-        // Проверка доступа к конкретной команде
         if (!groupManager.hasPermission(userId, fullCommand) &&
                 !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
             sendMessage(chatId, "[БОТ] У вас нет доступа к данной команде!");
@@ -593,7 +734,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        // --- Обработка конкретных команд ---
         if (cmd.startsWith("logs ")) {
             handleLogs(chatId, cmd, userId);
             return;
@@ -648,7 +788,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        // Если команда не распознана, выполняем как есть на сервере
         executeServerCommand(chatId, cmd, userId);
     }
 
