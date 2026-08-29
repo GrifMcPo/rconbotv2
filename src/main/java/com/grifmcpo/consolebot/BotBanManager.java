@@ -4,51 +4,83 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
-import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class BotBanManager {
 
     private final TelegramConsoleBot plugin;
-    private final DatabaseManager databaseManager;
+    private File banFile;
+    private FileConfiguration banConfig;
     private final Map<Long, BanData> bans = new ConcurrentHashMap<>();
 
-    public BotBanManager(TelegramConsoleBot plugin, DatabaseManager databaseManager) {
+    public BotBanManager(TelegramConsoleBot plugin) {
         this.plugin = plugin;
-        this.databaseManager = databaseManager;
         loadBans();
     }
 
     private void loadBans() {
-        bans.clear();
-        
-        databaseManager.getAllBotBans().thenAccept(bansList -> {
-            for (Map<String, Object> banData : bansList) {
-                long userId = Long.parseLong((String) banData.get("telegram_id"));
-                String reason = (String) banData.get("reason");
-                long timestamp = (Long) banData.get("timestamp");
-                long expiry = (Long) banData.get("expiry");
-                String issuer = (String) banData.get("issuer");
-                
-                String duration = expiry == -1 ? "навсегда" : getDurationString(expiry - timestamp);
-                bans.put(userId, new BanData(userId, reason, duration, timestamp, expiry, issuer));
+        banFile = new File(plugin.getDataFolder(), "botbans.yml");
+        if (!banFile.exists()) {
+            try {
+                banFile.createNewFile();
+            } catch (Exception e) {
+                plugin.getLogger().severe("Не удалось создать botbans.yml");
             }
-            plugin.getLogger().info("Загружено банов в боте: " + bans.size());
-        });
+        }
+        banConfig = YamlConfiguration.loadConfiguration(banFile);
+        loadBansFromConfig();
     }
 
-    private String getDurationString(long millis) {
-        long seconds = millis / 1000;
-        long minutes = seconds / 60;
-        long hours = minutes / 60;
-        long days = hours / 24;
-        
-        if (days > 0) return days + "d";
-        if (hours > 0) return hours + "h";
-        if (minutes > 0) return minutes + "m";
-        return seconds + "s";
+    private void loadBansFromConfig() {
+        bans.clear();
+
+        for (String key : banConfig.getKeys(false)) {
+            long userId = Long.parseLong(key);
+            String reason = banConfig.getString(key + ".reason", "Без причины");
+            String duration = banConfig.getString(key + ".duration", "навсегда");
+            long timestamp = banConfig.getLong(key + ".timestamp", System.currentTimeMillis());
+            long expires = banConfig.getLong(key + ".expires", -1);
+            String issuer = banConfig.getString(key + ".issuer", "RCON");
+
+            bans.put(userId, new BanData(userId, reason, duration, timestamp, expires, issuer));
+        }
+
+        removeExpiredBans();
+        plugin.getLogger().info("Загружено банов в боте: " + bans.size());
+    }
+
+    public void saveBans() {
+        for (Map.Entry<Long, BanData> entry : bans.entrySet()) {
+            long userId = entry.getKey();
+            BanData ban = entry.getValue();
+            banConfig.set(String.valueOf(userId) + ".reason", ban.reason);
+            banConfig.set(String.valueOf(userId) + ".duration", ban.duration);
+            banConfig.set(String.valueOf(userId) + ".timestamp", ban.timestamp);
+            banConfig.set(String.valueOf(userId) + ".expires", ban.expires);
+            banConfig.set(String.valueOf(userId) + ".issuer", ban.issuer);
+        }
+        try {
+            banConfig.save(banFile);
+        } catch (Exception e) {
+            plugin.getLogger().severe("Ошибка сохранения botbans.yml: " + e.getMessage());
+        }
+    }
+
+    private void removeExpiredBans() {
+        long now = System.currentTimeMillis();
+        List<Long> toRemove = new ArrayList<>();
+        for (Map.Entry<Long, BanData> entry : bans.entrySet()) {
+            if (entry.getValue().isExpired()) {
+                toRemove.add(entry.getKey());
+            }
+        }
+        for (long id : toRemove) {
+            bans.remove(id);
+        }
+        if (!toRemove.isEmpty()) {
+            saveBans();
+        }
     }
 
     public boolean banUser(long userId, String reason, String duration, String issuer) {
@@ -65,13 +97,11 @@ public class BotBanManager {
         }
 
         long timestamp = System.currentTimeMillis();
-        long expiry = duration.equals("навсегда") ? -1 : timestamp + parseTimeToMillis(duration);
+        long expires = duration.equals("навсегда") ? -1 : timestamp + parseTimeToMillis(duration);
 
-        // Сохраняем в БД
-        databaseManager.banBotUser(String.valueOf(userId), reason, issuer, expiry);
-        
-        BanData ban = new BanData(userId, reason, duration, timestamp, expiry, issuer);
+        BanData ban = new BanData(userId, reason, duration, timestamp, expires, issuer);
         bans.put(userId, ban);
+        saveBans();
 
         return true;
     }
@@ -81,8 +111,8 @@ public class BotBanManager {
             return false;
         }
 
-        databaseManager.unbanBotUser(String.valueOf(userId));
         bans.remove(userId);
+        saveBans();
         return true;
     }
 
@@ -92,7 +122,6 @@ public class BotBanManager {
     }
 
     public BanData getBanData(long userId) {
-        removeExpiredBans();
         return bans.get(userId);
     }
 
@@ -115,20 +144,6 @@ public class BotBanManager {
     public List<BanData> getAllBans() {
         removeExpiredBans();
         return new ArrayList<>(bans.values());
-    }
-
-    private void removeExpiredBans() {
-        long now = System.currentTimeMillis();
-        List<Long> toRemove = new ArrayList<>();
-        for (Map.Entry<Long, BanData> entry : bans.entrySet()) {
-            if (entry.getValue().isExpired()) {
-                toRemove.add(entry.getKey());
-            }
-        }
-        for (long id : toRemove) {
-            bans.remove(id);
-            databaseManager.unbanBotUser(String.valueOf(id));
-        }
     }
 
     private long parseTimeToMillis(String time) {
