@@ -423,7 +423,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String reason;
         int start = 2;
 
-        // Проверяем, является ли второй аргумент временем (кроме unwarn, unban, unmute, kick, warn)
         if (!action.equals("unwarn") && !action.equals("unban") && !action.equals("unmute") && !action.equals("kick") && !action.equals("warn")) {
             if (parts.length > 2 && punishmentManager.isValidTime(parts[2])) {
                 duration = parts[2];
@@ -453,75 +452,75 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             case "ban":
                 success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, broadcast);
                 if (success) {
-                    String timeStr = duration.equals("навсегда") ? "" : " §fна §b" + punishmentManager.formatDuration(duration) + " §f";
-                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fзабанил §c" + playerName + timeStr + "§fпо причине: §7" + reason + " §8(глобальный)";
+                    String timeStr = duration.equals("навсегда") ? "" : " на " + punishmentManager.formatDuration(duration) + " ";
+                    result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " забанил " + playerName + timeStr + "по причине: " + reason + " (глобальный)";
                 } else {
-                    result = "[БОТ] " + playerName + " уже забанен!";
+                    result = "[БОТ] Ответ от сервера:\n" + playerName + " уже забанен!";
                 }
                 break;
 
             case "banuuid":
                 success = punishmentManager.banUuid(playerName, issuer, reason, duration, hidden, broadcast);
                 if (success) {
-                    String timeStr = duration.equals("навсегда") ? "" : " §fна §b" + punishmentManager.formatDuration(duration) + " §f";
-                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fзабанил §c" + playerName + " (по UUID)" + timeStr + "§fпо причине: §7" + reason + " §8(глобальный)";
+                    String timeStr = duration.equals("навсегда") ? "" : " на " + punishmentManager.formatDuration(duration) + " ";
+                    result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " забанил " + playerName + " (по UUID)" + timeStr + "по причине: " + reason + " (глобальный)";
                 } else {
-                    result = "[БОТ] " + playerName + " уже забанен или не найден!";
+                    result = "[БОТ] Ответ от сервера:\n" + playerName + " уже забанен или не найден!";
                 }
                 break;
 
             case "mute":
                 success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, broadcast);
                 if (success) {
-                    String timeStr = duration.equals("навсегда") ? "" : " §fна §b" + punishmentManager.formatDuration(duration) + " §f";
-                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fзамутил §c" + playerName + timeStr + "§fпо причине: §7" + reason + " §8(глобальный)";
+                    String timeStr = duration.equals("навсегда") ? "" : " на " + punishmentManager.formatDuration(duration) + " ";
+                    result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " замутил " + playerName + timeStr + "по причине: " + reason + " (глобальный)";
                 } else {
-                    result = "[БОТ] " + playerName + " уже замучен!";
+                    result = "[БОТ] Ответ от сервера:\n" + playerName + " уже замучен!";
                 }
                 break;
 
             case "kick":
                 success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden, broadcast);
                 if (success) {
-                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fкикнул §c" + playerName + " §fпо причине: §7" + reason + " §8(глобальный)";
+                    result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " кикнул " + playerName + " по причине: " + reason + " (глобальный)";
                 } else {
-                    result = "[БОТ] " + playerName + " не найден!";
+                    result = "[БОТ] Ответ от сервера:\n" + playerName + " не найден!";
                 }
                 break;
 
             case "warn":
                 success = punishmentManager.warnPlayer(playerName, issuer, reason, hidden, broadcast);
                 if (success) {
-                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fвыдал предупреждение §c" + playerName + " §fпо причине: §7" + reason + " §8(глобальный)";
+                    result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " выдал предупреждение " + playerName + " по причине: " + reason + " (глобальный)";
                 } else {
-                    result = "[БОТ] Не удалось выдать предупреждение!";
+                    result = "[БОТ] Ответ от сервера:\nНе удалось выдать предупреждение!";
                 }
                 break;
 
             case "unwarn":
                 success = punishmentManager.unwarnPlayer(playerName, issuer, reason, broadcast);
                 if (success) {
-                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fснял предупреждение §a" + playerName + " §fпо причине: §7" + reason + " §8(глобальный)";
+                    result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " снял предупреждение " + playerName + " по причине: " + reason + " (глобальный)";
                 } else {
-                    result = "[БОТ] У игрока " + playerName + " нет предупреждений!";
+                    result = "[БОТ] Ответ от сервера:\nУ игрока " + playerName + " нет предупреждений!";
                 }
                 break;
 
             case "unban":
                 success = punishmentManager.unbanPlayer(playerName, issuer, reason, broadcast);
                 if (success) {
-                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fразбанил §a" + playerName + " §fпо причине: §7" + reason + " §8(глобальный)";
+                    result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " разбанил " + playerName + " по причине: " + reason + " (глобальный)";
                 } else {
-                    result = "[БОТ] " + playerName + " не забанен!";
+                    result = "[БОТ] Ответ от сервера:\n" + playerName + " не забанен!";
                 }
                 break;
 
             case "unmute":
                 success = punishmentManager.unmutePlayer(playerName, issuer, reason, broadcast);
                 if (success) {
-                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fразмутил §a" + playerName + " §fпо причине: §7" + reason + " §8(глобальный)";
+                    result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " размутил " + playerName + " по причине: " + reason + " (глобальный)";
                 } else {
-                    result = "[БОТ] " + playerName + " не замучен!";
+                    result = "[БОТ] Ответ от сервера:\n" + playerName + " не замучен!";
                 }
                 break;
         }
@@ -568,11 +567,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         boolean success = punishmentManager.banIp(playerName, issuer, reason, duration, hidden);
         if (success) {
-            String timeStr = duration.equals("навсегда") ? "" : " §fна §b" + punishmentManager.formatDuration(duration) + " §f";
-            String msg = "§4❨！❩ §fИгрок §9" + issuer + " §fзабанил IP §c" + playerName + timeStr + "§fпо причине: §7" + reason + " §8(глобальный)";
+            String timeStr = duration.equals("навсегда") ? "" : " на " + punishmentManager.formatDuration(duration) + " ";
+            String msg = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " забанил IP " + playerName + timeStr + "по причине: " + reason + " (глобальный)";
             sendMessage(chatId, msg);
         } else {
-            sendMessage(chatId, "[БОТ] Не удалось забанить IP " + playerName);
+            sendMessage(chatId, "[БОТ] Ответ от сервера:\nНе удалось забанить IP " + playerName);
         }
     }
 
@@ -593,10 +592,10 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         boolean success = punishmentManager.unbanIp(playerName, issuer, reason);
         if (success) {
-            String msg = "§4❨！❩ §fИгрок §9" + issuer + " §fразбанил IP §a" + playerName + " §fпо причине: §7" + reason + " §8(глобальный)";
+            String msg = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " разбанил IP " + playerName + " по причине: " + reason + " (глобальный)";
             sendMessage(chatId, msg);
         } else {
-            sendMessage(chatId, "[БОТ] IP игрока " + playerName + " не забанен!");
+            sendMessage(chatId, "[БОТ] Ответ от сервера:\nIP игрока " + playerName + " не забанен!");
         }
     }
 
@@ -613,7 +612,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         boolean isBanned = punishmentManager.isBanned(playerName);
         if (!isBanned) {
-            sendMessage(chatId, "[БОТ] Игрок " + playerName + " не забанен.");
+            sendMessage(chatId, "[БОТ] Ответ от сервера:\nИгрок " + playerName + " не забанен.");
             return;
         }
 
@@ -627,7 +626,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         boolean isHidden = entry != null && entry.hidden;
         boolean isIpBan = entry != null && entry.ipBan;
 
-        String response = "[БОТ] Ответ сервера:\n";
+        String response = "[БОТ] Ответ от сервера:\n";
         response += "----- " + playerName + " -----\n";
         response += " Причина: " + reason + "\n";
         response += " Время: " + punishmentManager.getFormattedDateTime(entry != null ? entry.timestamp : System.currentTimeMillis()) + "\n";
@@ -652,7 +651,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         boolean isMuted = punishmentManager.isMuted(playerName);
         if (!isMuted) {
-            sendMessage(chatId, "[БОТ] Игрок " + playerName + " не замучен.");
+            sendMessage(chatId, "[БОТ] Ответ от сервера:\nИгрок " + playerName + " не замучен.");
             return;
         }
 
@@ -665,7 +664,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         PunishmentManager.HistoryEntry entry = punishmentManager.getLastMute(playerName);
         boolean isHidden = entry != null && entry.hidden;
 
-        String response = "[БОТ] Ответ сервера:\n";
+        String response = "[БОТ] Ответ от сервера:\n";
         response += "----- " + playerName + " -----\n";
         response += " Причина: " + reason + "\n";
         response += " Время: " + punishmentManager.getFormattedDateTime(entry != null ? entry.timestamp : System.currentTimeMillis()) + "\n";
@@ -692,10 +691,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         int totalPages = (int) Math.ceil((double) allBans.size() / pageSize);
 
         if (bans.isEmpty()) {
-            sendMessage(chatId, "[БОТ] Список банов пуст.");
+            sendMessage(chatId, "[БОТ] Ответ от сервера:\nСписок банов пуст.");
         } else {
             StringBuilder response = new StringBuilder();
-            response.append("[БОТ] Список банов (Страница ").append(page).append("/").append(totalPages).append(")\n");
+            response.append("[БОТ] Ответ от сервера:\n");
+            response.append("Список банов (Страница ").append(page).append("/").append(totalPages).append(")\n");
             response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
             for (String ban : bans) {
                 response.append(ban).append("\n");
@@ -723,10 +723,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         int totalPages = (int) Math.ceil((double) allMutes.size() / pageSize);
 
         if (mutes.isEmpty()) {
-            sendMessage(chatId, "[БОТ] Список мутов пуст.");
+            sendMessage(chatId, "[БОТ] Ответ от сервера:\nСписок мутов пуст.");
         } else {
             StringBuilder response = new StringBuilder();
-            response.append("[БОТ] Список мутов (Страница ").append(page).append("/").append(totalPages).append(")\n");
+            response.append("[БОТ] Ответ от сервера:\n");
+            response.append("Список мутов (Страница ").append(page).append("/").append(totalPages).append(")\n");
             response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
             for (String mute : mutes) {
                 response.append(mute).append("\n");
@@ -827,7 +828,8 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         playersWithSameIp.remove(playerName);
 
         StringBuilder response = new StringBuilder();
-        response.append("[БОТ] Сканируем по нику: ").append(playerName).append("\n");
+        response.append("[БОТ] Ответ от сервера:\n");
+        response.append("Сканируем по нику: ").append(playerName).append("\n");
 
         if (playersWithSameIp.isEmpty()) {
             response.append("Нет других аккаунтов с этим IP");
@@ -897,7 +899,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        String response = "[БОТ] Ответ сервера:\n";
+        String response = "[БОТ] Ответ от сервера:\n";
         response += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
         response += "Ник: " + playerName + "\n";
         response += "Группа: " + group + "\n";
@@ -923,8 +925,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String sender = plugin.getCustomSender(userId);
         if (sender == null) sender = "RCON@" + userId;
 
-        String chatMessage = "§e[Объявление] §f" + message + " §7(пишет: " + sender + "§7)";
-        Bukkit.broadcastMessage(chatMessage);
+        Bukkit.broadcastMessage("§e[Объявление] §f" + message + " §7(пишет: " + sender + "§7)");
 
         sendMessage(chatId, "[БОТ] Ответ от сервера:\n[Объявление] " + message + " (пишет: " + sender + ")");
     }
@@ -951,10 +952,10 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, !hidden);
                 if (success) {
                     String timeStr = duration.equals("навсегда") ? "" : " на " + duration;
-                    result = "[БОТ] " + issuer + " забанил " + playerName + timeStr + " по причине: " + reason;
+                    result = "[БОТ] Ответ от сервера:\n" + issuer + " забанил " + playerName + timeStr + "по причине: " + reason;
                     if (hidden) result += " (СКРЫТО)";
                 } else {
-                    result = "[БОТ] " + playerName + " уже забанен!";
+                    result = "[БОТ] Ответ от сервера:\n" + playerName + " уже забанен!";
                 }
                 break;
 
@@ -962,43 +963,43 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, !hidden);
                 if (success) {
                     String timeStr = duration.equals("навсегда") ? "" : " на " + duration;
-                    result = "[БОТ] " + issuer + " замутил " + playerName + timeStr + " по причине: " + reason;
+                    result = "[БОТ] Ответ от сервера:\n" + issuer + " замутил " + playerName + timeStr + "по причине: " + reason;
                     if (hidden) result += " (СКРЫТО)";
                 } else {
-                    result = "[БОТ] " + playerName + " уже замучен!";
+                    result = "[БОТ] Ответ от сервера:\n" + playerName + " уже замучен!";
                 }
                 break;
 
             case "kick":
                 success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden, !hidden);
                 if (success) {
-                    result = "[БОТ] " + issuer + " кикнул " + playerName + " по причине: " + reason;
+                    result = "[БОТ] Ответ от сервера:\n" + issuer + " кикнул " + playerName + " по причине: " + reason;
                     if (hidden) result += " (СКРЫТО)";
                 } else {
-                    result = "[БОТ] " + playerName + " не найден!";
+                    result = "[БОТ] Ответ от сервера:\n" + playerName + " не найден!";
                 }
                 break;
 
             case "unban":
                 success = punishmentManager.unbanPlayer(playerName, issuer, reason, true);
                 if (success) {
-                    result = "[БОТ] " + issuer + " разбанил " + playerName + " по причине: " + reason;
+                    result = "[БОТ] Ответ от сервера:\n" + issuer + " разбанил " + playerName + " по причине: " + reason;
                 } else {
-                    result = "[БОТ] " + playerName + " не забанен!";
+                    result = "[БОТ] Ответ от сервера:\n" + playerName + " не забанен!";
                 }
                 break;
 
             case "unmute":
                 success = punishmentManager.unmutePlayer(playerName, issuer, reason, true);
                 if (success) {
-                    result = "[БОТ] " + issuer + " размутил " + playerName + " по причине: " + reason;
+                    result = "[БОТ] Ответ от сервера:\n" + issuer + " размутил " + playerName + " по причине: " + reason;
                 } else {
-                    result = "[БОТ] " + playerName + " не замучен!";
+                    result = "[БОТ] Ответ от сервера:\n" + playerName + " не замучен!";
                 }
                 break;
 
             default:
-                result = "Неизвестное действие!";
+                result = "[БОТ] Ответ от сервера:\nНеизвестное действие!";
                 break;
         }
 
@@ -1046,7 +1047,8 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String title = type.equals("banlist") ? "Список банов" :
                        type.equals("mutelist") ? "Список мутов" :
                        "История наказаний для " + playerName;
-        response.append("[БОТ] ").append(title).append(" (Страница ").append(page).append("/").append(totalPages).append(")");
+        response.append("[БОТ] Ответ от сервера:\n");
+        response.append(title).append(" (Страница ").append(page).append("/").append(totalPages).append(")");
 
         for (String item : pageItems) {
             response.append("\n\n").append(item);
