@@ -752,7 +752,7 @@ public class PunishmentManager implements Listener {
         String ip = player.getAddress() != null ? player.getAddress().getHostString() : "—";
 
         if (isIpBanned(playerName, ip)) {
-            long expiry = ipBanExpiry.getOrDefault(playerName, -1);
+            long expiry = ipBanExpiry.getOrDefault(playerName, -1L);
             String issuer = ipBanIssuers.getOrDefault(playerName, "Администрация");
             String reason = ipBanReasons.getOrDefault(playerName, "IP бан");
             event.disallow(PlayerLoginEvent.Result.KICK_BANNED, getBanMessage(playerName, issuer, reason, expiry, true));
@@ -760,7 +760,7 @@ public class PunishmentManager implements Listener {
         }
 
         if (isBanned(playerName)) {
-            long expiry = bans.getOrDefault(playerName, -1);
+            long expiry = bans.getOrDefault(playerName, -1L);
             String issuer = banIssuers.getOrDefault(playerName, "Администрация");
             String reason = banReasons.getOrDefault(playerName, "Без причины");
             event.disallow(PlayerLoginEvent.Result.KICK_BANNED, getBanMessage(playerName, issuer, reason, expiry, false));
@@ -773,7 +773,7 @@ public class PunishmentManager implements Listener {
         String playerName = player.getName();
 
         if (isBanned(playerName)) {
-            long expiry = bans.getOrDefault(playerName, -1);
+            long expiry = bans.getOrDefault(playerName, -1L);
             String issuer = banIssuers.getOrDefault(playerName, "Администрация");
             String reason = banReasons.getOrDefault(playerName, "Без причины");
             player.kickPlayer(getBanMessage(playerName, issuer, reason, expiry, false));
@@ -784,7 +784,7 @@ public class PunishmentManager implements Listener {
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         Player player = event.getPlayer();
         if (isMuted(player.getName())) {
-            long expiry = mutes.getOrDefault(player.getName(), -1);
+            long expiry = mutes.getOrDefault(player.getName(), -1L);
             String issuer = muteIssuers.getOrDefault(player.getName(), "Администрация");
             String reason = muteReasons.getOrDefault(player.getName(), "Без причины");
             player.sendMessage(getMuteMessage(player.getName(), issuer, reason, expiry));
@@ -864,11 +864,13 @@ public class PunishmentManager implements Listener {
     }
 
     public long getBanExpiry(String playerName) {
-        return bans.getOrDefault(playerName, -1);
+        Long value = bans.get(playerName);
+        return value != null ? value : -1L;
     }
 
     public long getMuteExpiry(String playerName) {
-        return mutes.getOrDefault(playerName, -1);
+        Long value = mutes.get(playerName);
+        return value != null ? value : -1L;
     }
 
     public List<String> getBanList() {
