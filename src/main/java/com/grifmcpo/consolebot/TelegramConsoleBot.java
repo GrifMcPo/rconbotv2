@@ -25,9 +25,7 @@ public class TelegramConsoleBot extends JavaPlugin {
     private AdminLogger adminLogger;
     private BotBanManager botBanManager;
     private GroupManager groupManager;
-    private AuthManager authManager;
     private TelegramBotHandler botHandler;
-    private AuthListener authListener;
 
     @Override
     public void onEnable() {
@@ -50,50 +48,41 @@ public class TelegramConsoleBot extends JavaPlugin {
         punishmentManager = new PunishmentManager(this, adminLogger);
         botBanManager = new BotBanManager(this);
         groupManager = new GroupManager(this);
-        authManager = new AuthManager(this);
 
         Bukkit.getPluginManager().registerEvents(punishmentManager, this);
         Bukkit.getPluginManager().registerEvents(commandLogger, this);
 
-        PlayerCommands playerCommands = new PlayerCommands(this, punishmentManager, playerManager, commandLogger, authManager);
+        // ===== РЕГИСТРАЦИЯ КОМАНД ДЛЯ ИГРОКОВ =====
+        PlayerCommands playerCommands = new PlayerCommands(this, punishmentManager, playerManager, commandLogger);
         
         try {
             getCommand("ban").setExecutor(playerCommands);
+            getCommand("banuuid").setExecutor(playerCommands);
             getCommand("mute").setExecutor(playerCommands);
             getCommand("kick").setExecutor(playerCommands);
+            getCommand("warn").setExecutor(playerCommands);
+            getCommand("unwarn").setExecutor(playerCommands);
             getCommand("bc").setExecutor(playerCommands);
             getCommand("logs").setExecutor(playerCommands);
             getCommand("hist").setExecutor(playerCommands);
             getCommand("shist").setExecutor(playerCommands);
             getCommand("dupeip").setExecutor(playerCommands);
-            getCommand("tg").setExecutor(playerCommands);
+            getCommand("pex").setExecutor(playerCommands);
             getLogger().info("Все команды для игроков зарегистрированы!");
         } catch (NullPointerException e) {
             getLogger().warning("Некоторые команды не найдены в plugin.yml");
         }
 
+        // ===== РЕГИСТРАЦИЯ TELEGRAM БОТА =====
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
             botHandler = new TelegramBotHandler(token, this, playerManager, commandLogger, logsCommand,
-                    commandExecutor, punishmentManager, botBanManager, groupManager, authManager);
+                    commandExecutor, punishmentManager, botBanManager, groupManager);
             botsApi.registerBot(botHandler);
             getLogger().info("Telegram-бот успешно зарегистрирован!");
         } catch (TelegramApiException e) {
             getLogger().severe("Ошибка при регистрации бота: " + e.getMessage());
             e.printStackTrace();
-        }
-
-        authListener = new AuthListener(this, authManager, botHandler);
-        Bukkit.getPluginManager().registerEvents(authListener, this);
-        authListener.startSessionChecker();
-        getLogger().info("Система привязки Telegram запущена!");
-
-        UnlinkCommand unlinkCommand = new UnlinkCommand(this, botHandler);
-        try {
-            getCommand("untgm").setExecutor(unlinkCommand);
-            getLogger().info("Команда /untgm зарегистрирована!");
-        } catch (NullPointerException e) {
-            getLogger().warning("Команда /untgm не найдена в plugin.yml");
         }
     }
 
@@ -167,5 +156,4 @@ public class TelegramConsoleBot extends JavaPlugin {
     public BotBanManager getBotBanManager() { return botBanManager; }
     public GroupManager getGroupManager() { return groupManager; }
     public TelegramBotHandler getBotHandler() { return botHandler; }
-    public AuthManager getAuthManager() { return authManager; }
 }
