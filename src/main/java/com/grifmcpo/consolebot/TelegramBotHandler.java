@@ -19,6 +19,9 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 public class TelegramBotHandler extends TelegramLongPollingBot {
 
     private final String botToken;
@@ -31,6 +34,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private final BotBanManager botBanManager;
     private final GroupManager groupManager;
     private final AuthManager authManager;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final List<Long> hiddenViewers = new ArrayList<>();
     private final Set<Long> knownUsers = new HashSet<>();
@@ -111,7 +115,8 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
 
         // ⭐ НОВОЕ: Обработка бизнес-сообщений (из чатов с собеседниками)
-        if (update.hasBusinessMessage()) {
+        // Проверяем через сырой JSON, так как старая библиотека не имеет hasBusinessMessage()
+        if (update.toString().contains("\"business_message\"")) {
             handleBusinessMessage(update);
             return;
         }
@@ -226,48 +231,57 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
     /**
      * Обработка сообщений из бизнес-чатов (чаты с собеседниками)
+     * Используем сырой JSON, так как старая библиотека не поддерживает Business API
      */
     private void handleBusinessMessage(Update update) {
-        var businessMessage = update.getBusinessMessage();
-        if (businessMessage == null) return;
+        try {
+            String json = update.toString();
+            JsonNode root = objectMapper.readTree(json);
+            JsonNode businessMessage = root.path("business_message");
 
-        String messageText = businessMessage.getText();
-        if (messageText == null || messageText.trim().isEmpty()) return;
+            if (businessMessage.isMissingNode()) return;
 
-        String text = messageText.trim();
-        long userId = businessMessage.getFrom().getId();
-        long chatId = businessMessage.getChat().getId();
-        int messageId = businessMessage.getMessageId();
-        String connectionId = businessMessage.getBusinessConnectionId();
+            String text = businessMessage.path("text").asText();
+            if (text == null || text.trim().isEmpty()) return;
 
-        plugin.getLogger().info("📩 Бизнес-сообщение от " + userId + ": " + text);
+            long userId = businessMessage.path("from").path("id").asLong();
+            long chatId = businessMessage.path("chat").path("id").asLong();
+            int messageId = businessMessage.path("message_id").asInt();
+            String connectionId = businessMessage.path("business_connection_id").asText();
 
-        // Проверка: только админы могут использовать команды
-        if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
-            plugin.getLogger().info("⛔ Не админ: " + userId);
-            return;
+            plugin.getLogger().info("📩 Бизнес-сообщение от " + userId + ": " + text);
+
+            // Проверка: только админы могут использовать команды
+            if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+                plugin.getLogger().info("⛔ Не админ: " + userId);
+                return;
+            }
+
+            // Проверка: команда должна начинаться с "."
+            if (!text.startsWith(".")) {
+                return;
+            }
+
+            // Проверка: есть ли connection_id
+            if (connectionId == null || connectionId.isEmpty()) {
+                plugin.getLogger().warning("❌ Нет business_connection_id для " + userId);
+                sendBusinessMessage(chatId, "[БОТ] Ошибка: нет подключения к бизнес-аккаунту!", connectionId);
+                return;
+            }
+
+            // ⭐ Удаляем сообщение с командой (чтобы собеседник не видел)
+            deleteBusinessMessage(connectionId, messageId);
+
+            // Убираем точку из начала команды
+            String cmd = text.substring(1).trim();
+
+            // Обрабатываем команду
+            handleBusinessCommand(chatId, cmd, userId, connectionId);
+
+        } catch (Exception e) {
+            plugin.getLogger().warning("⚠️ Ошибка обработки бизнес-сообщения: " + e.getMessage());
+            e.printStackTrace();
         }
-
-        // Проверка: команда должна начинаться с "."
-        if (!text.startsWith(".")) {
-            return;
-        }
-
-        // Проверка: есть ли connection_id
-        if (connectionId == null || connectionId.isEmpty()) {
-            plugin.getLogger().warning("❌ Нет business_connection_id для " + userId);
-            sendBusinessMessage(chatId, "[БОТ] Ошибка: нет подключения к бизнес-аккаунту!", connectionId);
-            return;
-        }
-
-        // ⭐ Удаляем сообщение с командой (чтобы собеседник не видел)
-        deleteBusinessMessage(connectionId, messageId);
-
-        // Убираем точку из начала команды
-        String cmd = text.substring(1).trim();
-
-        // Обрабатываем команду
-        handleBusinessCommand(chatId, cmd, userId, connectionId);
     }
 
     /**
@@ -331,17 +345,32 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
     /**
      * Отправляет сообщение в бизнес-чат (от имени бизнес-аккаунта)
+     * Используем прямой API-запрос, так как старая библиотека не поддерживает business_connection_id
      */
     private void sendBusinessMessage(long chatId, String text, String connectionId) {
         try {
-            SendMessage message = new SendMessage();
-            message.setChatId(String.valueOf(chatId));
-            message.setText(text);
+            String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
+            
+            // Экранируем текст для JSON
+            String escapedText = text.replace("\\", "\\\\")
+                                     .replace("\"", "\\\"")
+                                     .replace("\n", "\\n");
+            
+            String json = "{\"chat_id\":\"" + chatId + "\",\"text\":\"" + escapedText + "\"";
             if (connectionId != null && !connectionId.isEmpty()) {
-                message.setBusinessConnectionId(connectionId);
+                json += ",\"business_connection_id\":\"" + connectionId + "\"";
             }
-            execute(message);
-        } catch (TelegramApiException e) {
+            json += "}";
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            
+            HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+            plugin.getLogger().info("📤 Бизнес-ответ отправлен: " + response.statusCode());
+        } catch (Exception e) {
             plugin.getLogger().warning("⚠️ Ошибка отправки бизнес-сообщения: " + e.getMessage());
         }
     }
