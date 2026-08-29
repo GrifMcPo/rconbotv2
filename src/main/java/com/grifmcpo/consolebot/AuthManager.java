@@ -1,10 +1,9 @@
 package com.grifmcpo.consolebot;
 
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.File;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,6 +15,11 @@ public class AuthManager {
     private final Map<String, AuthData> authData = new ConcurrentHashMap<>();
     private final Map<String, String> pendingCodes = new ConcurrentHashMap<>();
     private final Map<String, Long> pendingCodeExpiry = new ConcurrentHashMap<>();
+    private final Map<String, List<String>> bannedIps = new ConcurrentHashMap<>();
+    private final Map<String, Long> banExpiry = new ConcurrentHashMap<>();
+
+    private static final long SESSION_DURATION = 5 * 60 * 60 * 1000;
+    private static final long BAN_DURATION = 10 * 60 * 60 * 1000;
 
     public AuthManager(JavaPlugin plugin, DatabaseManager databaseManager) {
         this.plugin = plugin;
@@ -79,10 +83,11 @@ public class AuthManager {
             return false;
         }
 
-        // Сохраняем в БД
-        CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
         try {
+            // Получаем UUID игрока
+            CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
             String uuid = uuidFuture.get();
+            
             if (uuid == null) {
                 // Если игрока нет в БД - создаем
                 Player player = Bukkit.getPlayer(playerName);
@@ -93,6 +98,7 @@ public class AuthManager {
                 }
             }
             
+            // Сохраняем в БД
             databaseManager.linkPlayer(uuid, playerName, telegramId, ip);
             
             AuthData data = authData.getOrDefault(playerName, new AuthData());
@@ -112,8 +118,8 @@ public class AuthManager {
     public boolean unlinkAccount(String playerName) {
         if (!authData.containsKey(playerName)) return false;
         
-        CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
         try {
+            CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
             String uuid = uuidFuture.get();
             if (uuid != null) {
                 databaseManager.unlinkPlayer(uuid);
@@ -122,17 +128,11 @@ public class AuthManager {
             AuthData data = authData.get(playerName);
             data.telegramId = null;
             data.blocked = false;
-            saveAuthData();
             return true;
         } catch (Exception e) {
             plugin.getLogger().severe("Ошибка отвязки: " + e.getMessage());
             return false;
         }
-    }
-
-    private void saveAuthData() {
-        // Данные сохраняются в БД автоматически через databaseManager
-        // Но держим кэш в памяти
     }
 
     public boolean isLinked(String playerName) {
@@ -175,8 +175,8 @@ public class AuthManager {
         
         data.blocked = !data.blocked;
         
-        CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
         try {
+            CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
             String uuid = uuidFuture.get();
             if (uuid != null) {
                 databaseManager.setBlocked(uuid, data.blocked);
@@ -194,8 +194,6 @@ public class AuthManager {
     }
 
     // ===== СЕССИЯ =====
-    private static final long SESSION_DURATION = 5 * 60 * 60 * 1000;
-
     public boolean isSessionValid(String playerName) {
         AuthData data = authData.get(playerName);
         if (data == null || data.telegramId == null) return true;
@@ -209,8 +207,8 @@ public class AuthManager {
         if (data != null) {
             data.sessionStart = System.currentTimeMillis();
             
-            CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
             try {
+                CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
                 String uuid = uuidFuture.get();
                 if (uuid != null) {
                     databaseManager.updateSession(uuid);
@@ -240,8 +238,8 @@ public class AuthManager {
         if (data != null) {
             data.ip = ip;
             
-            CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
             try {
+                CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
                 String uuid = uuidFuture.get();
                 if (uuid != null) {
                     databaseManager.updateIp(uuid, ip);
@@ -258,10 +256,6 @@ public class AuthManager {
     }
 
     // ===== БАН IP =====
-    private static final long BAN_DURATION = 10 * 60 * 60 * 1000;
-    private final Map<String, List<String>> bannedIps = new ConcurrentHashMap<>();
-    private final Map<String, Long> banExpiry = new ConcurrentHashMap<>();
-
     public boolean banIp(String playerName, String ip) {
         AuthData data = authData.get(playerName);
         if (data == null) return false;
