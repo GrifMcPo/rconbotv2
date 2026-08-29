@@ -57,6 +57,10 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         this.authManager = authManager;
         loadHiddenViewers();
         loadKnownUsers();
+
+        plugin.getLogger().info("🤖 TelegramBotHandler инициализирован!");
+        plugin.getLogger().info("📌 Бот готов к приёму команд!");
+        plugin.getLogger().info("💡 Для бизнес-команд используйте: .rcon <команда>");
     }
 
     private void loadHiddenViewers() {
@@ -114,9 +118,27 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        // ⭐ НОВОЕ: Обработка бизнес-сообщений (из чатов с собеседниками)
-        // Проверяем через сырой JSON, так как старая библиотека не имеет hasBusinessMessage()
-        if (update.toString().contains("\"business_message\"")) {
+        // ⭐ ПРОВЕРКА: Это бизнес-сообщение?
+        String jsonString = update.toString();
+        
+        // Проверяем разными способами наличие бизнес-сообщения
+        boolean isBusiness = false;
+        try {
+            JsonNode root = objectMapper.readTree(jsonString);
+            if (root.has("business_message")) {
+                isBusiness = true;
+                plugin.getLogger().info("🔍 Обнаружено business_message (прямой путь)");
+            } else if (root.has("message") && root.path("message").has("business_connection_id")) {
+                isBusiness = true;
+                plugin.getLogger().info("🔍 Обнаружено business_connection_id в message");
+            }
+        } catch (Exception e) {
+            // Игнорируем ошибки парсинга
+        }
+
+        // Если это бизнес-сообщение — обрабатываем отдельно
+        if (isBusiness) {
+            plugin.getLogger().info("📩 ПЕРЕХОД В handleBusinessMessage()");
             handleBusinessMessage(update);
             return;
         }
@@ -129,7 +151,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         long chatId = update.getMessage().getChatId();
 
         saveKnownUser(userId);
-        plugin.getLogger().info("Получено: " + messageText + " от " + userId);
+        plugin.getLogger().info("📩 Обычное сообщение от " + userId + ": " + messageText);
 
         if (botBanManager.isBanned(userId)) {
             sendMessage(chatId, botBanManager.getBanMessage(userId));
@@ -182,12 +204,10 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        // === ПРОВЕРКА ДЛЯ !rcon КОМАНД (с поддержкой ЛС) ===
+        // === ПРОВЕРКА ДЛЯ !rcon КОМАНД ===
         if (messageText.startsWith("!rcon")) {
-            // Определяем тип чата
             boolean isGroup = update.getMessage().isGroupMessage() || update.getMessage().isSuperGroupMessage();
 
-            // Если это ГРУППА — проверяем наличие "global"
             if (isGroup) {
                 if (!messageText.startsWith("!rcon global ")) {
                     sendMessage(chatId, "[БОТ] В группе используйте: !rcon global <команда>");
@@ -198,15 +218,15 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                     sendMessage(chatId, "[БОТ] У Вас нет доступа к боту!");
                     return;
                 }
+                plugin.getLogger().info("⚙️ Групповая RCON: " + messageText);
                 handleRconCommand(chatId, messageText.substring(13).trim(), userId);
                 return;
             }
 
-            // Если это ЛИЧНЫЙ ЧАТ с ботом — разрешаем без "global"
             if (!isGroup) {
-                String cmd = messageText.substring(6).trim(); // убираем "!rcon "
+                String cmd = messageText.substring(6).trim();
                 if (cmd.isEmpty()) {
-                    sendMessage(chatId, "[БОТ] Использование: !rcon <команда> (например: !rcon ban Steve 1d Спам)");
+                    sendMessage(chatId, "[БОТ] Использование: !rcon <команда>");
                     return;
                 }
                 String userGroup = groupManager.getUserGroup(userId);
@@ -214,44 +234,89 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                     sendMessage(chatId, "[БОТ] У Вас нет доступа к боту!");
                     return;
                 }
+                plugin.getLogger().info("⚙️ ЛС RCON: " + cmd);
                 handleRconCommand(chatId, cmd, userId);
                 return;
             }
         }
 
-        // Если команда начинается с "!" и не была обработана выше
         if (messageText.startsWith("!")) {
             sendMessage(chatId, "[БОТ] Неизвестная команда. Введите /помощь для списка команд.");
         }
     }
 
     // ================================================================
-    // ⭐ НОВЫЙ БЛОК: ОБРАБОТКА БИЗНЕС-СООБЩЕНИЙ (ЧАТЫ С СОБЕСЕДНИКАМИ)
+    // ⭐ БЛОК: ОБРАБОТКА БИЗНЕС-СООБЩЕНИЙ (ЧАТЫ С СОБЕСЕДНИКАМИ)
     // ================================================================
 
     /**
      * Обработка сообщений из бизнес-чатов (чаты с собеседниками)
-     * Используем сырой JSON, так как старая библиотека не поддерживает Business API
      */
     private void handleBusinessMessage(Update update) {
+        plugin.getLogger().info("📩 === ВХОД В handleBusinessMessage() ===");
+        
         try {
             String json = update.toString();
-            JsonNode root = objectMapper.readTree(json);
-            JsonNode businessMessage = root.path("business_message");
+            plugin.getLogger().info("📩 RAW JSON: " + json.substring(0, Math.min(json.length(), 500)) + "...");
 
-            if (businessMessage.isMissingNode()) return;
+            JsonNode root = objectMapper.readTree(json);
+            
+            // Ищем business_message
+            JsonNode businessMessage = root.path("business_message");
+            if (businessMessage.isMissingNode()) {
+                // Альтернативный путь: может быть в message с полем business_connection_id
+                JsonNode message = root.path("message");
+                if (message.has("business_connection_id")) {
+                    businessMessage = message;
+                    plugin.getLogger().info("📩 Найдено business_connection_id в message");
+                } else {
+                    plugin.getLogger().info("⏭️ Пропускаем: не бизнес-сообщение (нет business_message)");
+                    return;
+                }
+            }
 
             String text = businessMessage.path("text").asText();
-            if (text == null || text.trim().isEmpty()) return;
+            if (text == null || text.trim().isEmpty()) {
+                plugin.getLogger().info("⏭️ Пустое сообщение");
+                return;
+            }
 
             long userId = businessMessage.path("from").path("id").asLong();
             long chatId = businessMessage.path("chat").path("id").asLong();
             int messageId = businessMessage.path("message_id").asInt();
             String connectionId = businessMessage.path("business_connection_id").asText();
 
-            plugin.getLogger().info("📩 Бизнес-сообщение от " + userId + ": " + text);
+            // Если connectionId пустой — пробуем взять из корня
+            if (connectionId == null || connectionId.isEmpty()) {
+                connectionId = root.path("business_connection_id").asText();
+            }
 
-            // Проверка: только админы могут использовать команды
+            plugin.getLogger().info("📩 Бизнес-сообщение:");
+            plugin.getLogger().info("   👤 userId: " + userId);
+            plugin.getLogger().info("   💬 chatId: " + chatId);
+            plugin.getLogger().info("   📝 messageId: " + messageId);
+            plugin.getLogger().info("   🔗 connectionId: " + connectionId);
+            plugin.getLogger().info("   📄 text: " + text);
+
+            // ⭐ ПРОВЕРКА: Это событие ПОДКЛЮЧЕНИЯ бизнес-аккаунта?
+            if (text.contains("подключен") || text.contains("connected") || 
+                (businessMessage.has("business_connection_id") && connectionId != null && !connectionId.isEmpty())) {
+                plugin.getLogger().info("✅✅✅ БОТ ПОДКЛЮЧЕН К БИЗНЕС-АККАУНТУ! ✅✅✅");
+                plugin.getLogger().info("🔗 Connection ID: " + connectionId);
+                plugin.getLogger().info("👤 User ID: " + userId);
+                plugin.getLogger().info("📌 Теперь можно использовать .rcon команды в чатах с собеседниками!");
+                
+                // Отправляем подтверждение в чат
+                sendBusinessMessage(chatId, 
+                    "✅ БОТ ПОДКЛЮЧЕН К БИЗНЕС-АККАУНТУ!\n" +
+                    "🔗 Connection ID: " + connectionId + "\n" +
+                    "📌 Теперь можно использовать: .rcon <команда>\n" +
+                    "💡 Пример: .rcon ban Steve 1d Спам", 
+                    connectionId);
+                return;
+            }
+
+            // Проверка: только админы
             if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
                 plugin.getLogger().info("⛔ Не админ: " + userId);
                 return;
@@ -259,27 +324,33 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
             // Проверка: команда должна начинаться с "."
             if (!text.startsWith(".")) {
+                plugin.getLogger().info("⏭️ Не команда (нет .): " + text);
                 return;
             }
 
             // Проверка: есть ли connection_id
             if (connectionId == null || connectionId.isEmpty()) {
                 plugin.getLogger().warning("❌ Нет business_connection_id для " + userId);
-                sendBusinessMessage(chatId, "[БОТ] Ошибка: нет подключения к бизнес-аккаунту!", connectionId);
+                sendBusinessMessage(chatId, 
+                    "[БОТ] ❌ Ошибка: нет подключения к бизнес-аккаунту!\n" +
+                    "Проверьте, что бот добавлен в бизнес-аккаунт Telegram.", 
+                    "");
                 return;
             }
 
-            // ⭐ Удаляем сообщение с командой (чтобы собеседник не видел)
+            // ⭐ Удаляем сообщение с командой
+            plugin.getLogger().info("🗑️ Удаляем сообщение с командой (ID: " + messageId + ")");
             deleteBusinessMessage(connectionId, messageId);
 
-            // Убираем точку из начала команды
+            // Убираем точку
             String cmd = text.substring(1).trim();
+            plugin.getLogger().info("⚙️ Команда без точки: " + cmd);
 
             // Обрабатываем команду
             handleBusinessCommand(chatId, cmd, userId, connectionId);
 
         } catch (Exception e) {
-            plugin.getLogger().warning("⚠️ Ошибка обработки бизнес-сообщения: " + e.getMessage());
+            plugin.getLogger().warning("⚠️ ОШИБКА в handleBusinessMessage: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -288,79 +359,69 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
      * Обрабатывает команды из бизнес-чатов (с префиксом ".")
      */
     private void handleBusinessCommand(long chatId, String cmd, long userId, String connectionId) {
-        plugin.getLogger().info("⚙️ Бизнес-команда: " + cmd + " от " + userId);
+        plugin.getLogger().info("⚙️ === ВХОД В handleBusinessCommand() ===");
+        plugin.getLogger().info("⚙️ Команда: " + cmd);
+        plugin.getLogger().info("⚙️ От: " + userId);
+        plugin.getLogger().info("⚙️ connectionId: " + connectionId);
 
-        // Проверяем, есть ли у пользователя права на RCON-команды
-        if (!groupManager.hasPermission(userId, "!rcon global") &&
-                !plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
-            sendBusinessMessage(chatId, "[БОТ] У вас нет доступа к этой команде!", connectionId);
+        // Проверяем права
+        if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+            plugin.getLogger().info("⛔ Нет прав у " + userId);
+            sendBusinessMessage(chatId, "[БОТ] ❌ У вас нет доступа!", connectionId);
             return;
         }
 
-        // Убираем "rcon" из начала, если есть
-        String rconCmd = cmd;
-        if (cmd.startsWith("rcon ")) {
-            rconCmd = cmd.substring(5).trim();
-        } else {
-            sendBusinessMessage(chatId, "[БОТ] Использование: .rcon <команда> (например: .rcon ban Steve 1d Спам)", connectionId);
+        // Проверяем, что это команда rcon
+        if (!cmd.startsWith("rcon ")) {
+            plugin.getLogger().info("⏭️ Не rcon команда: " + cmd);
+            sendBusinessMessage(chatId, 
+                "[БОТ] Использование: .rcon <команда>\n" +
+                "Пример: .rcon ban Steve 1d Спам", 
+                connectionId);
             return;
         }
 
+        // Убираем "rcon " из начала
+        String rconCmd = cmd.substring(5).trim();
         if (rconCmd.isEmpty()) {
+            plugin.getLogger().info("⏭️ Пустая rcon команда");
             sendBusinessMessage(chatId, "[БОТ] Использование: .rcon <команда>", connectionId);
             return;
         }
 
-        // Выполняем RCON-команду (используем существующий метод)
-        String finalRconCmd = rconCmd;
+        plugin.getLogger().info("✅ ВЫПОЛНЯЕМ RCON КОМАНДУ: " + rconCmd);
+        plugin.getLogger().info("✅ От пользователя: " + userId);
+
+        // Выполняем команду
         Bukkit.getScheduler().runTask(plugin, () -> {
-            String response = commandExecutor.executeCommand(finalRconCmd, "Telegram@" + userId);
-            if (response == null || response.isEmpty()) {
-                response = "✅ Команда выполнена!";
+            try {
+                plugin.getLogger().info("🔄 Запуск commandExecutor.executeCommand()");
+                String response = commandExecutor.executeCommand(rconCmd, "Telegram@" + userId);
+                plugin.getLogger().info("📤 Ответ от сервера: " + (response == null ? "null" : response.substring(0, Math.min(response.length(), 200)) + "..."));
+                
+                if (response == null || response.isEmpty()) {
+                    response = "✅ Команда выполнена!";
+                }
+                sendBusinessMessage(chatId, "[БОТ] Ответ:\n" + response, connectionId);
+                plugin.getLogger().info("✅ Ответ отправлен в бизнес-чат");
+            } catch (Exception e) {
+                plugin.getLogger().warning("⚠️ Ошибка выполнения RCON: " + e.getMessage());
+                e.printStackTrace();
+                sendBusinessMessage(chatId, "[БОТ] ❌ Ошибка: " + e.getMessage(), connectionId);
             }
-            sendBusinessMessage(chatId, "[БОТ] Ответ:\n" + response, connectionId);
         });
     }
 
     /**
-     * Удаляет сообщение из бизнес-чата (чтобы собеседник не видел команду)
+     * Удаляет сообщение из бизнес-чата
      */
     private void deleteBusinessMessage(String connectionId, int messageId) {
+        plugin.getLogger().info("🗑️ deleteBusinessMessage: connectionId=" + connectionId + ", messageId=" + messageId);
         try {
             String url = "https://api.telegram.org/bot" + botToken + "/deleteBusinessMessages";
             String json = "{\"business_connection_id\":\"" + connectionId + "\",\"message_ids\":[" + messageId + "]}";
             
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(json))
-                    .build();
-            
-            HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-            plugin.getLogger().info("🗑️ Удалено бизнес-сообщение: " + messageId);
-        } catch (Exception e) {
-            plugin.getLogger().warning("⚠️ Не удалось удалить сообщение: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Отправляет сообщение в бизнес-чат (от имени бизнес-аккаунта)
-     * Используем прямой API-запрос, так как старая библиотека не поддерживает business_connection_id
-     */
-    private void sendBusinessMessage(long chatId, String text, String connectionId) {
-        try {
-            String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
-            
-            // Экранируем текст для JSON
-            String escapedText = text.replace("\\", "\\\\")
-                                     .replace("\"", "\\\"")
-                                     .replace("\n", "\\n");
-            
-            String json = "{\"chat_id\":\"" + chatId + "\",\"text\":\"" + escapedText + "\"";
-            if (connectionId != null && !connectionId.isEmpty()) {
-                json += ",\"business_connection_id\":\"" + connectionId + "\"";
-            }
-            json += "}";
+            plugin.getLogger().info("📤 DELETE запрос: " + json);
             
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -369,9 +430,48 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                     .build();
             
             HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-            plugin.getLogger().info("📤 Бизнес-ответ отправлен: " + response.statusCode());
+            plugin.getLogger().info("🗑️ Результат удаления: " + response.statusCode() + " - " + response.body());
+        } catch (Exception e) {
+            plugin.getLogger().warning("⚠️ Не удалось удалить сообщение: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Отправляет сообщение в бизнес-чат
+     */
+    private void sendBusinessMessage(long chatId, String text, String connectionId) {
+        plugin.getLogger().info("📤 sendBusinessMessage: chatId=" + chatId + ", connectionId=" + connectionId);
+        plugin.getLogger().info("📤 Текст: " + text.substring(0, Math.min(text.length(), 100)) + "...");
+        
+        try {
+            // Если нет connectionId — отправляем как обычное сообщение
+            if (connectionId == null || connectionId.isEmpty()) {
+                plugin.getLogger().info("⚠️ Нет connectionId, отправляем обычным способом");
+                sendMessage(chatId, text);
+                return;
+            }
+
+            String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
+            String escapedText = text.replace("\\", "\\\\")
+                                     .replace("\"", "\\\"")
+                                     .replace("\n", "\\n");
+            
+            String json = "{\"chat_id\":\"" + chatId + "\",\"text\":\"" + escapedText + "\",\"business_connection_id\":\"" + connectionId + "\"}";
+            
+            plugin.getLogger().info("📤 Отправка JSON: " + json);
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            
+            HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+            plugin.getLogger().info("📤 Результат отправки: " + response.statusCode() + " - " + response.body());
         } catch (Exception e) {
             plugin.getLogger().warning("⚠️ Ошибка отправки бизнес-сообщения: " + e.getMessage());
+            // Пробуем отправить обычным способом
+            sendMessage(chatId, text);
         }
     }
 
