@@ -216,7 +216,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             
             JsonNode businessMessage = root.path("business_message");
             if (businessMessage.isMissingNode()) {
-                // Альтернативный путь: может быть в message с полем business_connection_id
                 JsonNode message = root.path("message");
                 if (message.has("business_connection_id")) {
                     businessMessage = message;
@@ -245,13 +244,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             plugin.getLogger().info("📩 Бизнес-сообщение от " + userId + ": " + text);
             plugin.getLogger().info("   🔗 connectionId: " + connectionId);
 
-            // ⭐ Проверка: только админы
             if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
                 plugin.getLogger().info("⛔ Не админ: " + userId);
                 return;
             }
 
-            // ⭐ Проверка: команда должна начинаться с "."
             if (!text.startsWith(".")) {
                 plugin.getLogger().info("⏭️ Не команда (нет .): " + text);
                 return;
@@ -263,15 +260,12 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 return;
             }
 
-            // ⭐ Удаляем сообщение с командой (чтобы собеседник не видел)
             deleteBusinessMessage(connectionId, messageId);
             plugin.getLogger().info("🗑️ Удалено сообщение с командой (ID: " + messageId + ")");
 
-            // Убираем точку
             String cmd = text.substring(1).trim();
             plugin.getLogger().info("⚙️ Команда без точки: " + cmd);
 
-            // ⭐ Обрабатываем команду
             handleBusinessCommand(chatId, cmd, userId, connectionId);
 
         } catch (Exception e) {
@@ -283,14 +277,12 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleBusinessCommand(long chatId, String cmd, long userId, String connectionId) {
         plugin.getLogger().info("⚙️ Бизнес-команда: " + cmd + " от " + userId);
 
-        // Проверяем права
         if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
             plugin.getLogger().info("⛔ Нет прав у " + userId);
             sendBusinessMessage(chatId, "[БОТ] ❌ У вас нет доступа!", connectionId);
             return;
         }
 
-        // Проверяем, что это команда rcon
         if (!cmd.startsWith("rcon ")) {
             plugin.getLogger().info("⏭️ Не rcon команда: " + cmd);
             sendBusinessMessage(chatId, 
@@ -300,7 +292,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        // Убираем "rcon " из начала
         String rconCmd = cmd.substring(5).trim();
         if (rconCmd.isEmpty()) {
             plugin.getLogger().info("⏭️ Пустая rcon команда");
@@ -310,7 +301,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         plugin.getLogger().info("✅ Выполняем RCON: " + rconCmd);
 
-        // ⭐ ВАЖНО: Проверяем права на конкретную команду через groupManager
         String cmdName = rconCmd.split(" ")[0];
         String fullCommand = "!rcon global " + cmdName;
         if (!groupManager.hasPermission(userId, fullCommand) &&
@@ -320,26 +310,19 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        // Выполняем команду через существующий handleRconCommand
-        // Но нам нужно сохранить формат вывода, поэтому вызываем напрямую методы
+        // ⭐ СОЗДАЁМ ФИНАЛЬНУЮ КОПИЮ ДЛЯ ЛЯМБДЫ
+        final String finalRconCmd = rconCmd;
+        final String finalConnectionId = connectionId;
+        final long finalChatId = chatId;
+        final long finalUserId = userId;
+
         Bukkit.getScheduler().runTask(plugin, () -> {
             try {
-                // Используем существующие методы для обработки команд
-                // Они отправляют ответ через sendMessage, но нам нужно отправить в бизнес-чат
-                // Поэтому мы перехватываем ответ и отправляем через sendBusinessMessage
-                
-                // Временный "перехватчик" ответа
-                // Мы будем использовать существующие методы, но заменим sendMessage на sendBusinessMessage
-                // Для этого мы создадим временный объект, который будет отправлять ответы в бизнес-чат
-                
-                // Так как мы не можем легко перехватить sendMessage, мы просто вызываем handleRconCommand
-                // с модифицированным поведением - используем отдельный метод
-                processRconCommandForBusiness(chatId, rconCmd, userId, connectionId);
-                
+                processRconCommandForBusiness(finalChatId, finalRconCmd, finalUserId, finalConnectionId);
             } catch (Exception e) {
                 plugin.getLogger().warning("⚠️ Ошибка выполнения RCON: " + e.getMessage());
                 e.printStackTrace();
-                sendBusinessMessage(chatId, "[БОТ] ❌ Ошибка: " + e.getMessage(), connectionId);
+                sendBusinessMessage(finalChatId, "[БОТ] ❌ Ошибка: " + e.getMessage(), finalConnectionId);
             }
         });
     }
@@ -361,7 +344,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        // Обрабатываем команды так же, как в handleRconCommand, но отправляем ответ в бизнес-чат
         if (cmd.startsWith("logs ")) {
             handleLogsBusiness(chatId, cmd, userId, connectionId);
             return;
@@ -420,7 +402,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     }
 
     // ================================================================
-    // ⭐ БИЗНЕС-ВЕРСИИ ВСЕХ МЕТОДОВ (отправляют ответ в бизнес-чат)
+    // ⭐ БИЗНЕС-ВЕРСИИ ВСЕХ МЕТОДОВ
     // ================================================================
 
     private void handleLogsBusiness(long chatId, String cmd, long userId, String connectionId) {
@@ -857,9 +839,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     // ⭐ МЕТОДЫ ДЛЯ РАБОТЫ С BUSINESS API
     // ================================================================
 
-    /**
-     * Удаляет сообщение из бизнес-чата (чтобы собеседник не видел команду)
-     */
     private void deleteBusinessMessage(String connectionId, int messageId) {
         try {
             String url = "https://api.telegram.org/bot" + botToken + "/deleteBusinessMessages";
@@ -878,9 +857,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
     }
 
-    /**
-     * Отправляет сообщение в бизнес-чат (от имени бизнес-аккаунта)
-     */
     private void sendBusinessMessage(long chatId, String text, String connectionId) {
         try {
             if (connectionId == null || connectionId.isEmpty()) {
