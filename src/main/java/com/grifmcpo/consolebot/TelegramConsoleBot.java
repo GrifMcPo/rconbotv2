@@ -1,7 +1,6 @@
-package com.grifmcpo.consolebot;  
+package com.grifmcpo.consolebot;
 
 import org.bukkit.Bukkit;
-import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -17,6 +16,7 @@ public class TelegramConsoleBot extends JavaPlugin {
     private Map<String, String> admins = new HashMap<>();
     private long ownerId = 8889631346L;
     private File adminsFile;
+    
     private PlayerManager playerManager;
     private CommandLogger commandLogger;
     private LogsCommand logsCommand;
@@ -28,6 +28,7 @@ public class TelegramConsoleBot extends JavaPlugin {
     private AuthManager authManager;
     private TelegramBotHandler botHandler;
     private AuthListener authListener;
+    private DatabaseManager databaseManager;
 
     @Override
     public void onEnable() {
@@ -41,16 +42,19 @@ public class TelegramConsoleBot extends JavaPlugin {
             return;
         }
 
+        // ===== ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ =====
+        databaseManager = new DatabaseManager(this);
+
         loadAdmins();
         playerManager = new PlayerManager(this);
         commandLogger = new CommandLogger(this);
         logsCommand = new LogsCommand(this);
         commandExecutor = new CommandExecutor(this);
         adminLogger = new AdminLogger(this);
-        punishmentManager = new PunishmentManager(this, adminLogger);
-        botBanManager = new BotBanManager(this);
+        punishmentManager = new PunishmentManager(this, adminLogger, databaseManager);
+        botBanManager = new BotBanManager(this, databaseManager);
         groupManager = new GroupManager(this);
-        authManager = new AuthManager(this);
+        authManager = new AuthManager(this, databaseManager);
 
         Bukkit.getPluginManager().registerEvents(punishmentManager, this);
         Bukkit.getPluginManager().registerEvents(commandLogger, this);
@@ -99,6 +103,19 @@ public class TelegramConsoleBot extends JavaPlugin {
         } catch (NullPointerException e) {
             getLogger().warning("Команда /untgm не найдена в plugin.yml");
         }
+
+        // ===== ОЧИСТКА СТАРЫХ ЛОГОВ (КАЖДЫЙ ДЕНЬ) =====
+        Bukkit.getScheduler().runTaskTimer(this, () -> {
+            int days = getConfig().getInt("settings.log-cleanup-days", 30);
+            databaseManager.cleanOldLogs(days);
+        }, 20L * 60 * 60 * 24, 20L * 60 * 60 * 24);
+
+        // ===== АВТОСНЯТИЕ ПРОСРОЧЕННЫХ НАКАЗАНИЙ (КАЖДУЮ МИНУТУ) =====
+        Bukkit.getScheduler().runTaskTimer(this, () -> {
+            databaseManager.cleanExpiredPunishments();
+        }, 20L * 60, 20L * 60);
+
+        getLogger().info("✅ Плагин полностью загружен с SQLite поддержкой!");
     }
 
     @Override
@@ -106,6 +123,7 @@ public class TelegramConsoleBot extends JavaPlugin {
         getLogger().info("ConsoleBot выключен.");
         if (commandLogger != null) commandLogger.saveLogs();
         if (commandExecutor != null) commandExecutor.close();
+        if (databaseManager != null) databaseManager.disconnect();
     }
 
     private void loadAdmins() {
@@ -172,4 +190,5 @@ public class TelegramConsoleBot extends JavaPlugin {
     public GroupManager getGroupManager() { return groupManager; }
     public TelegramBotHandler getBotHandler() { return botHandler; }
     public AuthManager getAuthManager() { return authManager; }
+    public DatabaseManager getDatabaseManager() { return databaseManager; }
 }
