@@ -1,6 +1,6 @@
 package com.grifmcpo.consolebot;
 
-import org.bukkit.Bukkit;
+import org.bukkit.Bukkit; 
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
