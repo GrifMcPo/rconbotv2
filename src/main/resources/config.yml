@@ -6,3 +6,18 @@ rcon:
   host: "127.0.0.1"
   port: 25575
   password: "_87_14_10grifmcproRcon"
+# === НАСТРОЙКИ БАЗЫ ДАННЫХ ===
+database:
+  # Тип: sqlite или mysql
+  type: sqlite
+  
+  # Настройки для MySQL (если type=mysql)
+  mysql:
+    host: localhost
+    port: 3306
+    database: minecraft
+    username: root
+    password: ""
+
+# Очистка старых логов (в днях)
+log-cleanup-days: 30
