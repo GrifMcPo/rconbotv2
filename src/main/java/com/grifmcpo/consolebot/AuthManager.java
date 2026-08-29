@@ -6,66 +6,40 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class AuthManager {
 
     private final JavaPlugin plugin;
-    private File authFile;
-    private FileConfiguration authConfig;
+    private final DatabaseManager databaseManager;
     private final Map<String, AuthData> authData = new ConcurrentHashMap<>();
     private final Map<String, String> pendingCodes = new ConcurrentHashMap<>();
     private final Map<String, Long> pendingCodeExpiry = new ConcurrentHashMap<>();
-    private final Map<String, Boolean> blockedAccounts = new ConcurrentHashMap<>();
 
-    public AuthManager(JavaPlugin plugin) {
+    public AuthManager(JavaPlugin plugin, DatabaseManager databaseManager) {
         this.plugin = plugin;
+        this.databaseManager = databaseManager;
         loadAuthData();
     }
 
     private void loadAuthData() {
-        authFile = new File(plugin.getDataFolder(), "auth.yml");
-        if (!authFile.exists()) {
-            try {
-                authFile.createNewFile();
-            } catch (Exception e) {
-                plugin.getLogger().severe("Не удалось создать auth.yml");
+        authData.clear();
+        
+        databaseManager.getAllPlayers().thenAccept(players -> {
+            for (Map<String, Object> player : players) {
+                String playerName = (String) player.get("player_name");
+                AuthData data = new AuthData();
+                data.telegramId = (String) player.get("telegram_id");
+                data.ip = (String) player.get("ip");
+                data.sessionStart = (Long) player.get("session_start");
+                data.blocked = (Boolean) player.get("blocked");
+                if (data.telegramId != null) {
+                    authData.put(playerName, data);
+                }
             }
-        }
-        authConfig = YamlConfiguration.loadConfiguration(authFile);
-
-        for (String playerName : authConfig.getKeys(false)) {
-            AuthData data = new AuthData();
-            data.telegramId = authConfig.getString(playerName + ".telegramId");
-            data.ip = authConfig.getString(playerName + ".ip");
-            data.sessionStart = authConfig.getLong(playerName + ".sessionStart", 0);
-            data.hwid = authConfig.getString(playerName + ".hwid", "—");
-            data.bannedIps = authConfig.getStringList(playerName + ".bannedIps");
-            if (data.bannedIps == null) data.bannedIps = new ArrayList<>();
-            data.banExpiry = authConfig.getLong(playerName + ".banExpiry", 0);
-            data.blocked = authConfig.getBoolean(playerName + ".blocked", false);
-            authData.put(playerName, data);
-        }
-        plugin.getLogger().info("Загружено привязанных аккаунтов: " + authData.size());
-    }
-
-    public void saveAuthData() {
-        for (Map.Entry<String, AuthData> entry : authData.entrySet()) {
-            String playerName = entry.getKey();
-            AuthData data = entry.getValue();
-            authConfig.set(playerName + ".telegramId", data.telegramId);
-            authConfig.set(playerName + ".ip", data.ip);
-            authConfig.set(playerName + ".sessionStart", data.sessionStart);
-            authConfig.set(playerName + ".hwid", data.hwid);
-            authConfig.set(playerName + ".bannedIps", data.bannedIps);
-            authConfig.set(playerName + ".banExpiry", data.banExpiry);
-            authConfig.set(playerName + ".blocked", data.blocked);
-        }
-        try {
-            authConfig.save(authFile);
-        } catch (Exception e) {
-            plugin.getLogger().severe("Ошибка сохранения auth.yml: " + e.getMessage());
-        }
+            plugin.getLogger().info("Загружено привязанных аккаунтов из SQLite: " + authData.size());
+        });
     }
 
     public String generateCode(String playerName) {
@@ -94,6 +68,7 @@ public class AuthManager {
     }
 
     public boolean linkAccount(String playerName, String telegramId, String ip) {
+        // Проверяем, не привязан ли уже этот Telegram
         for (Map.Entry<String, AuthData> entry : authData.entrySet()) {
             if (entry.getValue().telegramId != null && entry.getValue().telegramId.equals(telegramId)) {
                 return false;
@@ -104,26 +79,60 @@ public class AuthManager {
             return false;
         }
 
-        AuthData data = authData.getOrDefault(playerName, new AuthData());
-        data.telegramId = telegramId;
-        data.ip = ip;
-        data.sessionStart = System.currentTimeMillis();
-        data.hwid = "—";
-        data.bannedIps = new ArrayList<>();
-        data.banExpiry = 0;
-        data.blocked = false;
-        authData.put(playerName, data);
-        saveAuthData();
-        return true;
+        // Сохраняем в БД
+        CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
+        try {
+            String uuid = uuidFuture.get();
+            if (uuid == null) {
+                // Если игрока нет в БД - создаем
+                Player player = Bukkit.getPlayer(playerName);
+                if (player != null) {
+                    uuid = player.getUniqueId().toString();
+                } else {
+                    return false;
+                }
+            }
+            
+            databaseManager.linkPlayer(uuid, playerName, telegramId, ip);
+            
+            AuthData data = authData.getOrDefault(playerName, new AuthData());
+            data.telegramId = telegramId;
+            data.ip = ip;
+            data.sessionStart = System.currentTimeMillis();
+            data.blocked = false;
+            authData.put(playerName, data);
+            
+            return true;
+        } catch (Exception e) {
+            plugin.getLogger().severe("Ошибка привязки: " + e.getMessage());
+            return false;
+        }
     }
 
     public boolean unlinkAccount(String playerName) {
         if (!authData.containsKey(playerName)) return false;
-        AuthData data = authData.get(playerName);
-        data.telegramId = null;
-        data.blocked = false;
-        saveAuthData();
-        return true;
+        
+        CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
+        try {
+            String uuid = uuidFuture.get();
+            if (uuid != null) {
+                databaseManager.unlinkPlayer(uuid);
+            }
+            
+            AuthData data = authData.get(playerName);
+            data.telegramId = null;
+            data.blocked = false;
+            saveAuthData();
+            return true;
+        } catch (Exception e) {
+            plugin.getLogger().severe("Ошибка отвязки: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private void saveAuthData() {
+        // Данные сохраняются в БД автоматически через databaseManager
+        // Но держим кэш в памяти
     }
 
     public boolean isLinked(String playerName) {
@@ -163,8 +172,19 @@ public class AuthManager {
     public boolean toggleBlock(String playerName) {
         AuthData data = authData.get(playerName);
         if (data == null || data.telegramId == null) return false;
+        
         data.blocked = !data.blocked;
-        saveAuthData();
+        
+        CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
+        try {
+            String uuid = uuidFuture.get();
+            if (uuid != null) {
+                databaseManager.setBlocked(uuid, data.blocked);
+            }
+        } catch (Exception e) {
+            plugin.getLogger().severe("Ошибка блокировки: " + e.getMessage());
+        }
+        
         return data.blocked;
     }
 
@@ -188,7 +208,16 @@ public class AuthManager {
         AuthData data = authData.get(playerName);
         if (data != null) {
             data.sessionStart = System.currentTimeMillis();
-            saveAuthData();
+            
+            CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
+            try {
+                String uuid = uuidFuture.get();
+                if (uuid != null) {
+                    databaseManager.updateSession(uuid);
+                }
+            } catch (Exception e) {
+                plugin.getLogger().severe("Ошибка обновления сессии: " + e.getMessage());
+            }
         }
     }
 
@@ -210,7 +239,16 @@ public class AuthManager {
         AuthData data = authData.get(playerName);
         if (data != null) {
             data.ip = ip;
-            saveAuthData();
+            
+            CompletableFuture<String> uuidFuture = databaseManager.getPlayerUuidByName(playerName);
+            try {
+                String uuid = uuidFuture.get();
+                if (uuid != null) {
+                    databaseManager.updateIp(uuid, ip);
+                }
+            } catch (Exception e) {
+                plugin.getLogger().severe("Ошибка обновления IP: " + e.getMessage());
+            }
         }
     }
 
@@ -221,46 +259,51 @@ public class AuthManager {
 
     // ===== БАН IP =====
     private static final long BAN_DURATION = 10 * 60 * 60 * 1000;
+    private final Map<String, List<String>> bannedIps = new ConcurrentHashMap<>();
+    private final Map<String, Long> banExpiry = new ConcurrentHashMap<>();
 
     public boolean banIp(String playerName, String ip) {
         AuthData data = authData.get(playerName);
         if (data == null) return false;
         
-        if (!data.bannedIps.contains(ip)) {
-            data.bannedIps.add(ip);
-            data.banExpiry = System.currentTimeMillis() + BAN_DURATION;
-            saveAuthData();
+        List<String> ips = bannedIps.getOrDefault(playerName, new ArrayList<>());
+        if (!ips.contains(ip)) {
+            ips.add(ip);
+            bannedIps.put(playerName, ips);
+            banExpiry.put(playerName, System.currentTimeMillis() + BAN_DURATION);
         }
         return true;
     }
 
     public boolean isIpBanned(String playerName, String ip) {
-        AuthData data = authData.get(playerName);
-        if (data == null) return false;
+        List<String> ips = bannedIps.get(playerName);
+        if (ips == null) return false;
         
-        if (data.banExpiry > 0 && System.currentTimeMillis() > data.banExpiry) {
-            data.bannedIps.clear();
-            data.banExpiry = 0;
-            saveAuthData();
+        Long expiry = banExpiry.get(playerName);
+        if (expiry != null && System.currentTimeMillis() > expiry) {
+            bannedIps.remove(playerName);
+            banExpiry.remove(playerName);
             return false;
         }
         
-        return data.bannedIps.contains(ip);
+        return ips.contains(ip);
     }
 
     public void unbanIp(String playerName, String ip) {
-        AuthData data = authData.get(playerName);
-        if (data != null) {
-            data.bannedIps.remove(ip);
-            data.banExpiry = 0;
-            saveAuthData();
+        List<String> ips = bannedIps.get(playerName);
+        if (ips != null) {
+            ips.remove(ip);
+            if (ips.isEmpty()) {
+                bannedIps.remove(playerName);
+                banExpiry.remove(playerName);
+            }
         }
     }
 
     public long getBanTimeLeft(String playerName) {
-        AuthData data = authData.get(playerName);
-        if (data == null || data.banExpiry == 0) return 0;
-        long left = data.banExpiry - System.currentTimeMillis();
+        Long expiry = banExpiry.get(playerName);
+        if (expiry == null) return 0;
+        long left = expiry - System.currentTimeMillis();
         return left > 0 ? left : 0;
     }
 
@@ -283,9 +326,6 @@ public class AuthManager {
         public String telegramId;
         public String ip;
         public long sessionStart;
-        public String hwid;
-        public List<String> bannedIps;
-        public long banExpiry;
         public boolean blocked;
     }
 }
