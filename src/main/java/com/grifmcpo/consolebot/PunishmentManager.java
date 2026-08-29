@@ -12,6 +12,7 @@ import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,8 +22,8 @@ public class PunishmentManager implements Listener {
 
     private final JavaPlugin plugin;
     private final AdminLogger adminLogger;
-    private final DatabaseManager databaseManager;
-
+    private File historyFile;
+    private org.bukkit.configuration.file.FileConfiguration historyConfig;
     private final Map<String, List<HistoryEntry>> history = new ConcurrentHashMap<>();
     private final Map<String, Long> bans = new ConcurrentHashMap<>();
     private final Map<String, Long> mutes = new ConcurrentHashMap<>();
@@ -36,44 +37,48 @@ public class PunishmentManager implements Listener {
     private final List<String> allowedCommands = Arrays.asList("msg", "tell", "r", "reply", "help", "pay", "balance", "bal");
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
 
-    public PunishmentManager(JavaPlugin plugin, AdminLogger adminLogger, DatabaseManager databaseManager) {
+    public PunishmentManager(JavaPlugin plugin, AdminLogger adminLogger) {
         this.plugin = plugin;
         this.adminLogger = adminLogger;
-        this.databaseManager = databaseManager;
         loadHistory();
         loadActivePunishments();
         startExpiryChecker();
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        plugin.getLogger().info("✅ PunishmentManager загружен с SQLite!");
+        plugin.getLogger().info("✅ PunishmentManager загружен!");
     }
 
+    @SuppressWarnings("unchecked")
     private void loadHistory() {
-        history.clear();
-
-        databaseManager.getAllPlayers().thenAccept(players -> {
-            for (Map<String, Object> player : players) {
-                String uuid = (String) player.get("uuid");
-                String playerName = (String) player.get("player_name");
-
-                databaseManager.getPunishmentHistory(uuid, 1000).thenAccept(punishments -> {
-                    List<HistoryEntry> entries = new ArrayList<>();
-                    for (Map<String, Object> p : punishments) {
-                        HistoryEntry he = new HistoryEntry();
-                        he.type = (String) p.get("type");
-                        he.player = playerName;
-                        he.issuer = (String) p.get("issuer");
-                        he.reason = (String) p.get("reason");
-                        he.duration = (String) p.get("duration");
-                        he.timestamp = (Long) p.get("timestamp");
-                        he.hidden = (Boolean) p.get("hidden");
-                        entries.add(he);
-                    }
-                    history.put(playerName, entries);
-                });
+        historyFile = new File(plugin.getDataFolder(), "history.yml");
+        if (!historyFile.exists()) {
+            try {
+                historyFile.createNewFile();
+            } catch (Exception e) {
+                plugin.getLogger().severe("Не удалось создать history.yml");
             }
-        });
+        }
+        historyConfig = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(historyFile);
 
-        plugin.getLogger().info("Загружена история наказаний из SQLite");
+        history.clear();
+        for (String playerName : historyConfig.getKeys(false)) {
+            List<Map<?, ?>> entries = (List<Map<?, ?>>) historyConfig.getList(playerName);
+            if (entries == null) continue;
+            List<HistoryEntry> list = new ArrayList<>();
+            for (Map<?, ?> entry : entries) {
+                HistoryEntry he = new HistoryEntry();
+                he.type = (String) entry.get("type");
+                he.player = (String) entry.get("player");
+                he.issuer = (String) entry.get("issuer");
+                he.reason = (String) entry.get("reason");
+                he.duration = (String) entry.get("duration");
+                he.timestamp = ((Number) entry.get("timestamp")).longValue();
+                Object hiddenObj = entry.get("hidden");
+                he.hidden = hiddenObj != null && (boolean) hiddenObj;
+                list.add(he);
+            }
+            history.put(playerName, list);
+        }
+        plugin.getLogger().info("Загружена история наказаний: " + history.size() + " игроков");
     }
 
     private void loadActivePunishments() {
@@ -86,35 +91,55 @@ public class PunishmentManager implements Listener {
         bannedIps.clear();
         ipBanExpiry.clear();
 
-        databaseManager.getAllActivePunishments().thenAccept(punishments -> {
-            for (Map<String, Object> p : punishments) {
-                String playerUuid = (String) p.get("player_uuid");
-                String type = (String) p.get("type");
-                String issuer = (String) p.get("issuer");
-                String reason = (String) p.get("reason");
-                String duration = (String) p.get("duration");
-                long timestamp = (Long) p.get("timestamp");
-                long expiry = (Long) p.get("expiry");
+        for (Map.Entry<String, List<HistoryEntry>> entry : history.entrySet()) {
+            String playerName = entry.getKey();
+            List<HistoryEntry> list = entry.getValue();
+            
+            if (list.isEmpty()) continue;
 
-                databaseManager.getPlayerNameByUuid(playerUuid).thenAccept(playerName -> {
-                    if (playerName == null) return;
+            for (int i = list.size() - 1; i >= 0; i--) {
+                HistoryEntry he = list.get(i);
 
-                    if (type.equals("ban")) {
-                        bans.put(playerName, expiry);
-                        banIssuers.put(playerName, issuer);
-                        banReasons.put(playerName, reason);
-                        plugin.getLogger().info("✅ Загружен бан для " + playerName);
-                    } else if (type.equals("mute")) {
-                        mutes.put(playerName, expiry);
-                        muteIssuers.put(playerName, issuer);
-                        muteReasons.put(playerName, reason);
-                        plugin.getLogger().info("✅ Загружен мут для " + playerName);
+                if (he.type.equals("ban")) {
+                    boolean wasUnbanned = false;
+                    for (int j = i + 1; j < list.size(); j++) {
+                        if (list.get(j).type.equals("unban")) {
+                            wasUnbanned = true;
+                            break;
+                        }
                     }
-                });
-            }
-        });
+                    if (!wasUnbanned) {
+                        long expiry = he.duration.equals("навсегда") ? -1 : he.timestamp + parseTimeToMillis(he.duration);
+                        if (expiry == -1 || expiry > System.currentTimeMillis()) {
+                            bans.put(playerName, expiry);
+                            banIssuers.put(playerName, he.issuer);
+                            banReasons.put(playerName, he.reason);
+                        }
+                    }
+                    break;
+                }
 
-        plugin.getLogger().info("✅ Активные наказания загружены из SQLite!");
+                if (he.type.equals("mute")) {
+                    boolean wasUnmuted = false;
+                    for (int j = i + 1; j < list.size(); j++) {
+                        if (list.get(j).type.equals("unmute")) {
+                            wasUnmuted = true;
+                            break;
+                        }
+                    }
+                    if (!wasUnmuted) {
+                        long expiry = he.duration.equals("навсегда") ? -1 : he.timestamp + parseTimeToMillis(he.duration);
+                        if (expiry == -1 || expiry > System.currentTimeMillis()) {
+                            mutes.put(playerName, expiry);
+                            muteIssuers.put(playerName, he.issuer);
+                            muteReasons.put(playerName, he.reason);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        plugin.getLogger().info("✅ Загружено активных банов: " + bans.size() + ", мутов: " + mutes.size());
     }
 
     private void startExpiryChecker() {
@@ -136,13 +161,6 @@ public class PunishmentManager implements Listener {
                 bans.remove(playerName);
                 banIssuers.remove(playerName);
                 banReasons.remove(playerName);
-
-                databaseManager.getPlayerUuidByName(playerName).thenAccept(uuid -> {
-                    if (uuid != null) {
-                        databaseManager.deactivatePunishmentsByType(uuid, "ban");
-                    }
-                });
-
                 plugin.getLogger().info("Автоснятие бана: " + playerName);
             }
         }
@@ -154,17 +172,10 @@ public class PunishmentManager implements Listener {
                 mutes.remove(playerName);
                 muteIssuers.remove(playerName);
                 muteReasons.remove(playerName);
-
-                databaseManager.getPlayerUuidByName(playerName).thenAccept(uuid -> {
-                    if (uuid != null) {
-                        databaseManager.deactivatePunishmentsByType(uuid, "mute");
-                    }
-                });
-
                 plugin.getLogger().info("Автоснятие мута: " + playerName);
-                Player player = Bukkit.getPlayer(playerName);
-                if (player != null && player.isOnline()) {
-                    player.sendMessage("§aВаш мут был автоматически снят (срок истек)");
+                Player p = Bukkit.getPlayer(playerName);
+                if (p != null && p.isOnline()) {
+                    p.sendMessage("Ваш мут был автоматически снят (срок истек)");
                 }
             }
         }
@@ -178,6 +189,35 @@ public class PunishmentManager implements Listener {
                 plugin.getLogger().info("Автоснятие IP бана: " + playerName);
             }
         }
+    }
+
+    public void saveHistory() {
+        for (Map.Entry<String, List<HistoryEntry>> entry : history.entrySet()) {
+            List<Map<String, Object>> list = new ArrayList<>();
+            for (HistoryEntry he : entry.getValue()) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("type", he.type);
+                map.put("player", he.player);
+                map.put("issuer", he.issuer);
+                map.put("reason", he.reason);
+                map.put("duration", he.duration);
+                map.put("timestamp", he.timestamp);
+                map.put("hidden", he.hidden);
+                list.add(map);
+            }
+            historyConfig.set(entry.getKey(), list);
+        }
+        try {
+            historyConfig.save(historyFile);
+        } catch (Exception e) {
+            plugin.getLogger().severe("Ошибка сохранения history.yml: " + e.getMessage());
+        }
+    }
+
+    private void addHistorySync(String playerName, HistoryEntry entry) {
+        List<HistoryEntry> list = history.computeIfAbsent(playerName, k -> new ArrayList<>());
+        list.add(entry);
+        saveHistory();
     }
 
     // ============================================
@@ -196,63 +236,46 @@ public class PunishmentManager implements Listener {
         final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            databaseManager.getPlayerUuidByName(finalPlayerName).thenAccept(playerUuid -> {
-                final String finalPlayerUuid = playerUuid;
-                if (finalPlayerUuid == null) {
-                    Player player = Bukkit.getPlayer(finalPlayerName);
-                    if (player != null) {
-                        databaseManager.linkPlayer(player.getUniqueId().toString(), finalPlayerName, null, "—")
-                            .thenRun(() -> {
-                                databaseManager.getPlayerUuidByName(finalPlayerName).thenAccept(uuid -> {
-                                    if (uuid != null) {
-                                        applyBan(uuid, finalPlayerName, finalIssuer, finalReason, finalDuration, finalHidden, finalBroadcast);
-                                    }
-                                });
-                            });
-                    }
-                    return;
-                }
-                applyBan(finalPlayerUuid, finalPlayerName, finalIssuer, finalReason, finalDuration, finalHidden, finalBroadcast);
-            });
-        });
+            HistoryEntry entry = new HistoryEntry();
+            entry.type = "ban";
+            entry.player = finalPlayerName;
+            entry.issuer = finalIssuer;
+            entry.reason = finalReason;
+            entry.duration = finalDuration;
+            entry.timestamp = System.currentTimeMillis();
+            entry.hidden = finalHidden;
+            addHistorySync(finalPlayerName, entry);
 
-        return true;
-    }
+            long expiry = finalDuration.equals("навсегда") ? -1 : System.currentTimeMillis() + parseTimeToMillis(finalDuration);
+            bans.put(finalPlayerName, expiry);
+            banIssuers.put(finalPlayerName, finalIssuer);
+            banReasons.put(finalPlayerName, finalReason);
+            saveHistory();
 
-    private void applyBan(String playerUuid, String playerName, String issuer, String reason, String duration, boolean hidden, boolean broadcast) {
-        databaseManager.getPlayerUuidByName(issuer).thenAccept(issuerUuid -> {
-            final String finalIssuerUuid = issuerUuid != null ? issuerUuid : "CONSOLE";
-
-            long expiry = duration.equals("навсегда") ? -1 : System.currentTimeMillis() + parseTimeToMillis(duration);
-
-            databaseManager.addPunishment(playerUuid, "ban", finalIssuerUuid, reason, duration, expiry, hidden);
-
-            bans.put(playerName, expiry);
-            banIssuers.put(playerName, issuer);
-            banReasons.put(playerName, reason);
-
-            Player player = Bukkit.getPlayer(playerName);
+            Player player = Bukkit.getPlayer(finalPlayerName);
             if (player != null && player.isOnline()) {
                 String expiryStr = expiry == -1 ? "навсегда" : formatTimeLeft(expiry);
                 String kickMessage = "§c§lВаш аккаунт заблокирован!\n\n" +
-                        "§fПричина: §c" + reason + "\n" +
+                        "§fПричина: §c" + finalReason + "\n" +
                         "§fСервер: §cглобальный\n" +
-                        "§fВыдал: §9" + issuer + "\n" +
+                        "§fВыдал: §9" + finalIssuer + "\n" +
                         "§fИстекает через: §c" + expiryStr;
                 player.kickPlayer(kickMessage);
             }
 
-            if (broadcast && !hidden) {
-                String timeStr = duration.equals("навсегда") ? "" : " §fна §b" + formatDuration(duration) + " §f";
-                String msg = "§c§l(! ) §9Игрок " + issuer + " §fзабанил §c" + playerName +
-                             timeStr + "§fпо причине: §7" + reason + " (глобальный)";
+            if (finalBroadcast && !finalHidden) {
+                String timeStr = finalDuration.equals("навсегда") ? "" : " §fна §b" + formatDuration(finalDuration) + " §f";
+                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fзабанил §c" + finalPlayerName + 
+                             timeStr + "§fпо причине: §7" + finalReason + " (глобальный)";
                 Bukkit.broadcastMessage(msg);
             }
 
             if (adminLogger != null) {
-                adminLogger.log("BAN", playerName, issuer, reason, duration, hidden ? "СКРЫТО" : "ПУБЛИЧНО");
+                adminLogger.log("BAN", finalPlayerName, finalIssuer, finalReason, finalDuration, finalHidden ? "СКРЫТО" : "ПУБЛИЧНО");
             }
         });
+
+        return true;
     }
 
     public boolean banPlayer(String playerName, String issuer, String reason, String duration) {
@@ -273,18 +296,23 @@ public class PunishmentManager implements Listener {
         final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            databaseManager.getPlayerUuidByName(finalPlayerName).thenAccept(playerUuid -> {
-                if (playerUuid != null) {
-                    databaseManager.deactivatePunishmentsByType(playerUuid, "ban");
-                }
-            });
+            HistoryEntry entry = new HistoryEntry();
+            entry.type = "unban";
+            entry.player = finalPlayerName;
+            entry.issuer = finalIssuer;
+            entry.reason = finalReason;
+            entry.duration = "навсегда";
+            entry.timestamp = System.currentTimeMillis();
+            entry.hidden = false;
+            addHistorySync(finalPlayerName, entry);
 
             bans.remove(finalPlayerName);
             banIssuers.remove(finalPlayerName);
             banReasons.remove(finalPlayerName);
+            saveHistory();
 
             if (finalBroadcast) {
-                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fразбанил §c" + finalPlayerName +
+                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fразбанил §c" + finalPlayerName + 
                              " §fпо причине: §7" + finalReason + " (глобальный)";
                 Bukkit.broadcastMessage(msg);
             }
@@ -317,62 +345,45 @@ public class PunishmentManager implements Listener {
         final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            databaseManager.getPlayerUuidByName(finalPlayerName).thenAccept(playerUuid -> {
-                final String finalPlayerUuid = playerUuid;
-                if (finalPlayerUuid == null) {
-                    Player player = Bukkit.getPlayer(finalPlayerName);
-                    if (player != null) {
-                        databaseManager.linkPlayer(player.getUniqueId().toString(), finalPlayerName, null, "—")
-                            .thenRun(() -> {
-                                databaseManager.getPlayerUuidByName(finalPlayerName).thenAccept(uuid -> {
-                                    if (uuid != null) {
-                                        applyMute(uuid, finalPlayerName, finalIssuer, finalReason, finalDuration, finalHidden, finalBroadcast);
-                                    }
-                                });
-                            });
-                    }
-                    return;
-                }
-                applyMute(finalPlayerUuid, finalPlayerName, finalIssuer, finalReason, finalDuration, finalHidden, finalBroadcast);
-            });
-        });
+            HistoryEntry entry = new HistoryEntry();
+            entry.type = "mute";
+            entry.player = finalPlayerName;
+            entry.issuer = finalIssuer;
+            entry.reason = finalReason;
+            entry.duration = finalDuration;
+            entry.timestamp = System.currentTimeMillis();
+            entry.hidden = finalHidden;
+            addHistorySync(finalPlayerName, entry);
 
-        return true;
-    }
+            long expiry = finalDuration.equals("навсегда") ? -1 : System.currentTimeMillis() + parseTimeToMillis(finalDuration);
+            mutes.put(finalPlayerName, expiry);
+            muteIssuers.put(finalPlayerName, finalIssuer);
+            muteReasons.put(finalPlayerName, finalReason);
+            saveHistory();
 
-    private void applyMute(String playerUuid, String playerName, String issuer, String reason, String duration, boolean hidden, boolean broadcast) {
-        databaseManager.getPlayerUuidByName(issuer).thenAccept(issuerUuid -> {
-            final String finalIssuerUuid = issuerUuid != null ? issuerUuid : "CONSOLE";
-
-            long expiry = duration.equals("навсегда") ? -1 : System.currentTimeMillis() + parseTimeToMillis(duration);
-
-            databaseManager.addPunishment(playerUuid, "mute", finalIssuerUuid, reason, duration, expiry, hidden);
-
-            mutes.put(playerName, expiry);
-            muteIssuers.put(playerName, issuer);
-            muteReasons.put(playerName, reason);
-
-            Player player = Bukkit.getPlayer(playerName);
+            Player player = Bukkit.getPlayer(finalPlayerName);
             if (player != null && player.isOnline()) {
                 String expiryStr = expiry == -1 ? "навсегда" : formatTimeLeft(expiry);
                 String muteMessage = "§c§lВам заблокировали чат!\n\n" +
-                        "§fПричина: §c" + reason + "\n" +
-                        "§fВыдал: §9" + issuer + "\n" +
+                        "§fПричина: §c" + finalReason + "\n" +
+                        "§fВыдал: §9" + finalIssuer + "\n" +
                         "§fИстекает через: §c" + expiryStr;
                 player.sendMessage(muteMessage);
             }
 
-            if (broadcast && !hidden) {
-                String timeStr = duration.equals("навсегда") ? "" : " §fна §b" + formatDuration(duration) + " §f";
-                String msg = "§c§l(! ) §9Игрок " + issuer + " §fзамутил §c" + playerName +
-                             timeStr + "§fпо причине: §7" + reason + " (глобальный)";
+            if (finalBroadcast && !finalHidden) {
+                String timeStr = finalDuration.equals("навсегда") ? "" : " §fна §b" + formatDuration(finalDuration) + " §f";
+                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fзамутил §c" + finalPlayerName + 
+                             timeStr + "§fпо причине: §7" + finalReason + " (глобальный)";
                 Bukkit.broadcastMessage(msg);
             }
 
             if (adminLogger != null) {
-                adminLogger.log("MUTE", playerName, issuer, reason, duration, hidden ? "СКРЫТО" : "ПУБЛИЧНО");
+                adminLogger.log("MUTE", finalPlayerName, finalIssuer, finalReason, finalDuration, finalHidden ? "СКРЫТО" : "ПУБЛИЧНО");
             }
         });
+
+        return true;
     }
 
     public boolean mutePlayer(String playerName, String issuer, String reason, String duration) {
@@ -393,25 +404,30 @@ public class PunishmentManager implements Listener {
         final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            databaseManager.getPlayerUuidByName(finalPlayerName).thenAccept(playerUuid -> {
-                if (playerUuid != null) {
-                    databaseManager.deactivatePunishmentsByType(playerUuid, "mute");
-                }
-            });
+            HistoryEntry entry = new HistoryEntry();
+            entry.type = "unmute";
+            entry.player = finalPlayerName;
+            entry.issuer = finalIssuer;
+            entry.reason = finalReason;
+            entry.duration = "навсегда";
+            entry.timestamp = System.currentTimeMillis();
+            entry.hidden = false;
+            addHistorySync(finalPlayerName, entry);
 
             mutes.remove(finalPlayerName);
             muteIssuers.remove(finalPlayerName);
             muteReasons.remove(finalPlayerName);
+            saveHistory();
 
             if (finalBroadcast) {
-                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fразмутил §c" + finalPlayerName +
+                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fразмутил §c" + finalPlayerName + 
                              " §fпо причине: §7" + finalReason + " (глобальный)";
                 Bukkit.broadcastMessage(msg);
             }
 
             Player player = Bukkit.getPlayer(finalPlayerName);
             if (player != null && player.isOnline()) {
-                player.sendMessage("§aВаш мут был снят!");
+                player.sendMessage("Ваш мут был снят!");
             }
 
             if (adminLogger != null) {
@@ -443,23 +459,22 @@ public class PunishmentManager implements Listener {
                 return;
             }
 
-            databaseManager.getPlayerUuidByName(finalPlayerName).thenAccept(playerUuid -> {
-                final String finalPlayerUuid = playerUuid != null ? playerUuid : player.getUniqueId().toString();
-                if (playerUuid == null) {
-                    databaseManager.linkPlayer(finalPlayerUuid, finalPlayerName, null, "—");
-                }
-
-                databaseManager.getPlayerUuidByName(finalIssuer).thenAccept(issuerUuid -> {
-                    final String finalIssuerUuid = issuerUuid != null ? issuerUuid : "CONSOLE";
-                    databaseManager.addPunishment(finalPlayerUuid, "kick", finalIssuerUuid, finalReason, "навсегда", -1, finalHidden);
-                });
-            });
+            HistoryEntry entry = new HistoryEntry();
+            entry.type = "kick";
+            entry.player = finalPlayerName;
+            entry.issuer = finalIssuer;
+            entry.reason = finalReason;
+            entry.duration = "навсегда";
+            entry.timestamp = System.currentTimeMillis();
+            entry.hidden = finalHidden;
+            addHistorySync(finalPlayerName, entry);
+            saveHistory();
 
             String kickMessage = "§cВы были кикнуты!\n§7Причина: " + finalReason;
             player.kickPlayer(kickMessage);
 
             if (finalBroadcast && !finalHidden) {
-                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fкикнул §c" + finalPlayerName +
+                String msg = "§c§l(! ) §9Игрок " + finalIssuer + " §fкикнул §c" + finalPlayerName + 
                              " §fпо причине: §7" + finalReason + " (глобальный)";
                 Bukkit.broadcastMessage(msg);
             }
@@ -497,7 +512,7 @@ public class PunishmentManager implements Listener {
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             long expiry = finalDuration.equals("навсегда") ? -1 : System.currentTimeMillis() + parseTimeToMillis(finalDuration);
-
+            
             List<String> ips = bannedIps.getOrDefault(finalPlayerName, new ArrayList<>());
             if (!ips.contains(finalIp)) {
                 ips.add(finalIp);
@@ -538,14 +553,14 @@ public class PunishmentManager implements Listener {
 
     public boolean isIpBanned(String playerName, String ip) {
         if (!bannedIps.containsKey(playerName)) return false;
-
+        
         Long expiry = ipBanExpiry.get(playerName);
         if (expiry != null && expiry != -1 && System.currentTimeMillis() > expiry) {
             bannedIps.remove(playerName);
             ipBanExpiry.remove(playerName);
             return false;
         }
-
+        
         return bannedIps.get(playerName).contains(ip);
     }
 
@@ -558,12 +573,6 @@ public class PunishmentManager implements Listener {
         Player player = event.getPlayer();
         String playerName = player.getName();
         String ip = player.getAddress() != null ? player.getAddress().getHostString() : "—";
-
-        databaseManager.getPlayerUuidByName(playerName).thenAccept(uuid -> {
-            if (uuid != null) {
-                databaseManager.updateIp(uuid, ip);
-            }
-        });
 
         if (isIpBanned(playerName, ip)) {
             String kickMessage = "§c§lВаш IP адрес заблокирован!\n\n" +
@@ -585,12 +594,6 @@ public class PunishmentManager implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         String playerName = player.getName();
-
-        databaseManager.getPlayerUuidByName(playerName).thenAccept(uuid -> {
-            if (uuid == null) {
-                databaseManager.linkPlayer(player.getUniqueId().toString(), playerName, null, "—");
-            }
-        });
 
         if (isBanned(playerName)) {
             String kickMessage = getFullBanMessage(playerName);
