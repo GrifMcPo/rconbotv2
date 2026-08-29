@@ -11,7 +11,6 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -26,7 +25,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private final PunishmentManager punishmentManager;
     private final BotBanManager botBanManager;
     private final GroupManager groupManager;
-    private final AuthManager authManager;
 
     private final List<Long> hiddenViewers = new ArrayList<>();
     private final Set<Long> knownUsers = new HashSet<>();
@@ -35,8 +33,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     public TelegramBotHandler(String token, TelegramConsoleBot plugin, PlayerManager playerManager,
                               CommandLogger commandLogger, LogsCommand logsCommand,
                               CommandExecutor commandExecutor, PunishmentManager punishmentManager,
-                              BotBanManager botBanManager, GroupManager groupManager,
-                              AuthManager authManager) {
+                              BotBanManager botBanManager, GroupManager groupManager) {
         this.botToken = token;
         this.plugin = plugin;
         this.playerManager = playerManager;
@@ -46,7 +43,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         this.punishmentManager = punishmentManager;
         this.botBanManager = botBanManager;
         this.groupManager = groupManager;
-        this.authManager = authManager;
         loadHiddenViewers();
         loadKnownUsers();
     }
@@ -145,23 +141,22 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
 
         if (messageText.equalsIgnoreCase("/блокировка") || messageText.equalsIgnoreCase("!блокировка")) {
-            handleBlock(chatId, userId);
+            sendMessage(chatId, "[БОТ] Команда /блокировка больше не поддерживается. Используйте !rcon global ban");
             return;
         }
 
         if (messageText.equalsIgnoreCase("/кик") || messageText.equalsIgnoreCase("!кик")) {
-            handleKick(chatId, userId);
+            sendMessage(chatId, "[БОТ] Команда /кик больше не поддерживается. Используйте !rcon global kick");
             return;
         }
 
         if (messageText.equalsIgnoreCase("/отвязать") || messageText.equalsIgnoreCase("!отвязать")) {
-            handleUnlinkRequest(chatId, userId);
+            sendMessage(chatId, "[БОТ] Привязка аккаунтов отключена. Используйте !rcon global команды.");
             return;
         }
 
         if (messageText.startsWith("/привязать") || messageText.startsWith("!привязать")) {
-            String[] args = messageText.split(" ");
-            handleLink(chatId, args, userId);
+            sendMessage(chatId, "[БОТ] Привязка аккаунтов отключена. Используйте !rcon global команды.");
             return;
         }
 
@@ -227,280 +222,17 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
     }
 
-    private void sendStartMessage(long chatId) {
-        String msg = "[БОТ] Приветствую! Это официальный бот GrifMc!\n\n" +
-                "Команды:\n" +
-                "/помощь - список всех команд\n" +
-                "/привязать <ник> <код> - привязать аккаунт к Telegram";
-        sendMessage(chatId, msg);
-    }
-
-    private void sendHelp(long chatId) {
-        String msg = "[БОТ] Вот полный список команд:\n\n" +
-                "/блокировка - заблокировать/разблокировать аккаунт\n" +
-                "/кик - кикнуть аккаунт с сервера\n" +
-                "/отвязать - подать заявку на отвязку аккаунта\n" +
-                "/привязать <ник> <код> - привязать аккаунт\n" +
-                "/помощь2 - помощь по RCON командам\n" +
-                "/id - показать ваш Telegram ID";
-        sendMessage(chatId, msg);
-    }
-
-    private void sendHelp2(long chatId) {
-        String msg = "[БОТ] Помощь по RCON командам:\n\n" +
-                "!rcon global ban <ник> <время> <причина> [-s] - забанить игрока\n" +
-                "!rcon global mute <ник> <время> <причина> [-s] - замутить игрока\n" +
-                "!rcon global kick <ник> <причина> [-s] - кикнуть игрока\n" +
-                "!rcon global unban <ник> - разбанить игрока\n" +
-                "!rcon global unmute <ник> - размутить игрока\n" +
-                "!rcon global banip <ник> <время> <причина> [-s] - забанить IP игрока\n" +
-                "!rcon global checkban <ник> - проверить бан\n" +
-                "!rcon global checkmute <ник> - проверить мут\n" +
-                "!rcon global banlist - список банов\n" +
-                "!rcon global mutelist - список мутов\n" +
-                "!rcon global logs <ник> [кол-во] - логи команд\n" +
-                "!rcon global hist <ник> [кол-во] - история наказаний игрока\n" +
-                "!rcon global shist <ник> [кол-во] - наказания выданные игроком\n" +
-                "!rcon global dupeip <ник> - поиск по IP\n" +
-                "!rcon global pex user <ник> - информация об игроке\n" +
-                "!rcon global bc <текст> - объявление в чат";
-        sendMessage(chatId, msg);
-    }
-
-    private void handleBlock(long chatId, long userId) {
-        String playerName = authManager.getPlayerNameByTelegram(String.valueOf(userId));
-        if (playerName == null) {
-            sendMessage(chatId, "[БОТ] Ваш Telegram ID не привязан ни к одному аккаунту!");
-            return;
-        }
-
-        boolean isBlocked = authManager.toggleBlock(playerName);
-        if (isBlocked) {
-            sendMessage(chatId, "[БОТ] Аккаунт <<" + playerName + ">> был заблокирован!");
-            Player player = Bukkit.getPlayer(playerName);
-            if (player != null && player.isOnline()) {
-                player.kickPlayer("§c&lАккаунт заблокирован через ТГ!");
-            }
-        } else {
-            sendMessage(chatId, "[БОТ] Аккаунт <<" + playerName + ">> был разблокирован!");
-        }
-    }
-
-    private void handleKick(long chatId, long userId) {
-        String playerName = authManager.getPlayerNameByTelegram(String.valueOf(userId));
-        if (playerName == null) {
-            sendMessage(chatId, "[БОТ] Ваш Telegram ID не привязан ни к одному аккаунту!");
-            return;
-        }
-
-        Player player = Bukkit.getPlayer(playerName);
-        if (player != null && player.isOnline()) {
-            player.kickPlayer("§c&lАккаунт был кикнут через ТГ!");
-            sendMessage(chatId, "[БОТ] Аккаунт <<" + playerName + ">> был кикнут с сервера!");
-        } else {
-            sendMessage(chatId, "[БОТ] Аккаунт <<" + playerName + ">> не в сети на сервере!");
-        }
-    }
-
-    private void handleUnlinkRequest(long chatId, long userId) {
-        String playerName = authManager.getPlayerNameByTelegram(String.valueOf(userId));
-        if (playerName == null) {
-            sendMessage(chatId, "[БОТ] Ваш Telegram ID не привязан ни к одному аккаунту!");
-            return;
-        }
-
-        pendingUnlinkRequests.put(userId, playerName);
-        sendMessage(chatId, "[БОТ] Напишите в этот чат причину отвязки, после ваш аккаунт будет отвязан администратором.");
-    }
-
-    private void handleUnlinkReason(long chatId, long userId, String reason) {
-        String playerName = pendingUnlinkRequests.remove(userId);
-        if (playerName == null) return;
-
-        long ownerId = plugin.getOwnerId();
-        String msg = "[БОТ] Новая заявка на отвязку аккаунта!\n" +
-                "ID: " + userId + "\n" +
-                "Ник аккаунта: " + playerName + "\n" +
-                "Причина отвязки: " + reason;
-        sendMessage(ownerId, msg);
-        sendMessage(chatId, "[БОТ] Заявка на отвязку отправлена администратору!");
-    }
-
-    public boolean unlinkByAdmin(String playerName, String adminName) {
-        if (!authManager.isLinked(playerName)) {
-            return false;
-        }
-
-        String telegramId = authManager.getTelegramId(playerName);
-        authManager.unlinkAccount(playerName);
-
-        if (telegramId != null) {
-            try {
-                long chatId = Long.parseLong(telegramId);
-                sendMessage(chatId, "[БОТ] Ваш аккаунт был отвязан администратором " + adminName);
-            } catch (NumberFormatException e) {}
-        }
-
-        return true;
-    }
-
-    private void handleLink(long chatId, String[] args, long userId) {
-        if (args.length < 3) {
-            sendMessage(chatId, "[БОТ] Использование: /привязать <ник> <код>");
-            return;
-        }
-
-        String playerName = args[1];
-        String code = args[2];
-
-        Player target = Bukkit.getPlayer(playerName);
-        if (target == null) {
-            sendMessage(chatId, "[БОТ] Игрок " + playerName + " не найден на сервере!");
-            return;
-        }
-
-        if (!authManager.verifyCode(playerName, code)) {
-            sendMessage(chatId, "[БОТ] Неверный или просроченный код! Выполните /tg заново.");
-            return;
-        }
-
-        String existingPlayer = authManager.getPlayerNameByTelegram(String.valueOf(userId));
-        if (existingPlayer != null) {
-            sendMessage(chatId, "[БОТ] Этот Telegram ID уже привязан к аккаунту " + existingPlayer + "!");
-            return;
-        }
-
-        if (authManager.isLinked(playerName)) {
-            sendMessage(chatId, "[БОТ] Аккаунт " + playerName + " уже привязан к другому Telegram!");
-            return;
-        }
-
-        String ip = target.getAddress() != null ? target.getAddress().getHostString() : "—";
-        boolean success = authManager.linkAccount(playerName, String.valueOf(userId), ip);
-
-        if (success) {
-            sendMessage(chatId, "[БОТ] Аккаунт " + playerName + " успешно привязан к вашему Telegram!\n" +
-                    "Ваш ID: " + userId + "\n" +
-                    "Привязанный IP: " + ip + "\n" +
-                    "Сессия действует 5 часов.");
-            target.sendMessage("§aВаш аккаунт успешно привязан к Telegram!");
-        } else {
-            sendMessage(chatId, "[БОТ] Не удалось привязать аккаунт. Попробуйте позже.");
-        }
-    }
-
-    public void sendAuthRequest(String playerName, String ip) {
-        AuthManager.AuthData data = authManager.getAuthData(playerName);
-        if (data == null || data.telegramId == null) return;
-
-        long chatId = Long.parseLong(data.telegramId);
-        if (data.blocked) {
-            Player player = Bukkit.getPlayer(playerName);
-            if (player != null && player.isOnline()) {
-                player.kickPlayer("§c&lАккаунт заблокирован через ТГ!");
-            }
-            return;
-        }
-
-        String message = "Вход на аккаунт <<" + playerName + ">> с нового IP адреса!\n" +
-                "IP Адрес: " + ip + "\n" +
-                "Время: " + new SimpleDateFormat("dd.MM.yyyy HH:mm:ss").format(new Date());
-
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        List<InlineKeyboardButton> row = new ArrayList<>();
-
-        InlineKeyboardButton allowBtn = new InlineKeyboardButton();
-        allowBtn.setText("Разрешить");
-        allowBtn.setCallbackData("auth_allow_" + playerName + "_" + ip);
-
-        InlineKeyboardButton denyBtn = new InlineKeyboardButton();
-        denyBtn.setText("Запретить");
-        denyBtn.setCallbackData("auth_deny_" + playerName + "_" + ip);
-
-        row.add(allowBtn);
-        row.add(denyBtn);
-        rows.add(row);
-        markup.setKeyboard(rows);
-
-        SendMessage msg = new SendMessage();
-        msg.setChatId(String.valueOf(chatId));
-        msg.setText(message);
-        msg.setReplyMarkup(markup);
-
-        try {
-            execute(msg);
-        } catch (TelegramApiException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void sendSessionExpiredRequest(String playerName) {
-        AuthManager.AuthData data = authManager.getAuthData(playerName);
-        if (data == null || data.telegramId == null) return;
-
-        long chatId = Long.parseLong(data.telegramId);
-        if (data.blocked) {
-            Player player = Bukkit.getPlayer(playerName);
-            if (player != null && player.isOnline()) {
-                player.kickPlayer("§c&lАккаунт заблокирован через ТГ!");
-            }
-            return;
-        }
-
-        String ip = data.ip;
-        String message = "Сессия аккаунта <<" + playerName + ">> истекла!\n" +
-                "Текущий IP: " + ip + "\n" +
-                "Время: " + new SimpleDateFormat("dd.MM.yyyy HH:mm:ss").format(new Date()) + "\n\n" +
-                "Для продолжения игры подтвердите вход.";
-
-        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        List<InlineKeyboardButton> row = new ArrayList<>();
-
-        InlineKeyboardButton allowBtn = new InlineKeyboardButton();
-        allowBtn.setText("Разрешить");
-        allowBtn.setCallbackData("auth_allow_" + playerName + "_" + ip);
-
-        InlineKeyboardButton denyBtn = new InlineKeyboardButton();
-        denyBtn.setText("Запретить");
-        denyBtn.setCallbackData("auth_deny_" + playerName + "_" + ip);
-
-        row.add(allowBtn);
-        row.add(denyBtn);
-        rows.add(row);
-        markup.setKeyboard(rows);
-
-        SendMessage msg = new SendMessage();
-        msg.setChatId(String.valueOf(chatId));
-        msg.setText(message);
-        msg.setReplyMarkup(markup);
-
-        try {
-            execute(msg);
-        } catch (TelegramApiException e) {
-            e.printStackTrace();
-        }
-    }
-
     private void handleAuthAllow(long chatId, String data, int messageId) {
         String[] parts = data.split("_", 4);
         if (parts.length < 4) return;
         String playerName = parts[2];
         String ip = parts[3];
 
-        authManager.updateIp(playerName, ip);
-        authManager.refreshSession(playerName);
-        authManager.unbanIp(playerName, ip);
-
         deleteMessage(String.valueOf(chatId), messageId);
-        sendMessage(chatId, "[БОТ] Вход на аккаунт <<" + playerName + ">> успешно разрешен!\n" +
-                "Новый IP: " + ip + "\n" +
-                "Сессия действует 5 часов.");
+        sendMessage(chatId, "[БОТ] Авторизация через бот отключена. Используйте !rcon global команды.");
 
         Player player = Bukkit.getPlayer(playerName);
         if (player != null && player.isOnline()) {
-            player.sendMessage("§aВход разрешен!");
             player.setWalkSpeed(0.2f);
             player.setFlySpeed(0.1f);
             player.resetTitle();
@@ -513,19 +245,65 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String playerName = parts[2];
         String ip = parts[3];
 
-        authManager.banIp(playerName, ip);
-
         deleteMessage(String.valueOf(chatId), messageId);
-        sendMessage(chatId, "[БОТ] Вход на аккаунт <<" + playerName + ">> запрещен!\n" +
-                "IP: " + ip + " добавлен в черный список на 10 часов.");
+        sendMessage(chatId, "[БОТ] Авторизация через бот отключена.");
 
         Player player = Bukkit.getPlayer(playerName);
         if (player != null && player.isOnline()) {
-            long timeLeft = authManager.getBanTimeLeft(playerName);
-            player.kickPlayer("§4&lВаш IP адрес был заблокирован!\n" +
-                    "§fПричина: §cЗапрет входа на аккаунт. §7(с бота)\n" +
-                    "§fСрок: §c&n" + authManager.formatTimeLeft(timeLeft));
+            player.kickPlayer("Авторизация через бот отключена");
         }
+    }
+
+    private void handleUnlinkReason(long chatId, long userId, String reason) {
+        String playerName = pendingUnlinkRequests.remove(userId);
+        if (playerName == null) return;
+
+        sendMessage(chatId, "[БОТ] Привязка аккаунтов отключена. Обратитесь к администратору вручную.");
+    }
+
+    private void sendStartMessage(long chatId) {
+        String msg = "[БОТ] Приветствую! Это официальный бот GrifMc!\n\n" +
+                "Команды:\n" +
+                "/помощь - список всех команд\n" +
+                "!rcon global <команда> - выполнение RCON команд\n\n" +
+                "Привязка аккаунтов ОТКЛЮЧЕНА. Все команды выполняются через !rcon global";
+        sendMessage(chatId, msg);
+    }
+
+    private void sendHelp(long chatId) {
+        String msg = "[БОТ] Вот полный список команд:\n\n" +
+                "/помощь2 - помощь по RCON командам\n" +
+                "/id - показать ваш Telegram ID\n\n" +
+                "Для выполнения команд используйте:\n" +
+                "!rcon global <команда>\n\n" +
+                "Привязка аккаунтов ОТКЛЮЧЕНА!";
+        sendMessage(chatId, msg);
+    }
+
+    private void sendHelp2(long chatId) {
+        String msg = "[БОТ] Помощь по RCON командам:\n\n" +
+                "!rcon global ban <ник> [время] <причина> [-s] - забанить игрока\n" +
+                "!rcon global banuuid <uuid> [время] <причина> [-s] - бан по UUID\n" +
+                "!rcon global mute <ник> [время] <причина> [-s] - замутить игрока\n" +
+                "!rcon global kick <ник> <причина> [-s] - кикнуть игрока\n" +
+                "!rcon global warn <ник> <причина> [-s] - выдать предупреждение\n" +
+                "!rcon global unwarn <ник> <причина> - снять предупреждение\n" +
+                "!rcon global unban <ник> <причина> - разбанить игрока\n" +
+                "!rcon global unmute <ник> <причина> - размутить игрока\n" +
+                "!rcon global banip <ник> [время] <причина> [-s] - забанить IP игрока\n" +
+                "!rcon global unbanip <ник> <причина> - разбанить IP\n" +
+                "!rcon global checkban <ник> - проверить бан\n" +
+                "!rcon global checkmute <ник> - проверить мут\n" +
+                "!rcon global banlist - список банов\n" +
+                "!rcon global mutelist - список мутов\n" +
+                "!rcon global logs <ник> [кол-во] - логи команд\n" +
+                "!rcon global hist <ник> [кол-во] - история наказаний игрока\n" +
+                "!rcon global shist <ник> [кол-во] - наказания выданные игроком\n" +
+                "!rcon global dupeip <ник> - поиск по IP\n" +
+                "!rcon global pex user <ник> - информация об игроке\n" +
+                "!rcon global bc <текст> - объявление в чат\n\n" +
+                "Флаг -s делает наказание скрытым (без оповещений в чат и бота)";
+        sendMessage(chatId, msg);
     }
 
     private void handleRconCommand(long chatId, String cmd, long userId) {
@@ -534,7 +312,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        String cmdName = cmd.split(" ")[0];
+        String cmdName = cmd.split(" ")[0].toLowerCase();
         String fullCommand = "!rcon global " + cmdName;
 
         if (!groupManager.hasPermission(userId, fullCommand) &&
@@ -544,64 +322,427 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        if (cmd.startsWith("logs ")) {
-            handleLogs(chatId, cmd, userId);
-            return;
+        switch (cmdName) {
+            case "ban":
+                handlePunishment(chatId, cmd, userId, "ban");
+                break;
+            case "banuuid":
+                handlePunishment(chatId, cmd, userId, "banuuid");
+                break;
+            case "mute":
+                handlePunishment(chatId, cmd, userId, "mute");
+                break;
+            case "kick":
+                handlePunishment(chatId, cmd, userId, "kick");
+                break;
+            case "warn":
+                handlePunishment(chatId, cmd, userId, "warn");
+                break;
+            case "unwarn":
+                handlePunishment(chatId, cmd, userId, "unwarn");
+                break;
+            case "unban":
+                handlePunishment(chatId, cmd, userId, "unban");
+                break;
+            case "unmute":
+                handlePunishment(chatId, cmd, userId, "unmute");
+                break;
+            case "banip":
+                handleBanIp(chatId, cmd, userId);
+                break;
+            case "unbanip":
+                handleUnbanIp(chatId, cmd, userId);
+                break;
+            case "checkban":
+                handleCheckBan(chatId, cmd);
+                break;
+            case "checkmute":
+                handleCheckMute(chatId, cmd);
+                break;
+            case "banlist":
+                handleBanList(chatId, cmd);
+                break;
+            case "mutelist":
+                handleMuteList(chatId, cmd);
+                break;
+            case "logs":
+                handleLogs(chatId, cmd);
+                break;
+            case "shist":
+                handleShist(chatId, cmd);
+                break;
+            case "hist":
+                handleHist(chatId, cmd);
+                break;
+            case "dupeip":
+                handleDupeip(chatId, cmd);
+                break;
+            case "pex":
+                handlePexUser(chatId, cmd);
+                break;
+            case "bc":
+            case "bcast":
+                handleBroadcast(chatId, cmd, userId);
+                break;
+            default:
+                executeServerCommand(chatId, cmd, userId);
+                break;
         }
-        if (cmd.startsWith("shist ")) {
-            handleShist(chatId, cmd, userId);
-            return;
-        }
-        if (cmd.startsWith("hist ")) {
-            handleHist(chatId, cmd, userId);
-            return;
-        }
-        if (cmd.startsWith("dupeip ")) {
-            handleDupeip(chatId, cmd, userId);
-            return;
-        }
-        if (cmd.startsWith("pex user ")) {
-            handlePexUser(chatId, cmd, userId);
-            return;
-        }
-        if (cmd.startsWith("bc ") || cmd.startsWith("bcast ")) {
-            handleBroadcast(chatId, cmd, userId);
-            return;
-        }
-        if (cmd.startsWith("checkban ")) {
-            handleCheckBan(chatId, cmd);
-            return;
-        }
-        if (cmd.startsWith("checkmute ")) {
-            handleCheckMute(chatId, cmd);
-            return;
-        }
-        if (cmd.startsWith("banlist")) {
-            handleBanList(chatId, cmd);
-            return;
-        }
-        if (cmd.startsWith("mutelist")) {
-            handleMuteList(chatId, cmd);
-            return;
-        }
-        if (cmd.startsWith("banip ")) {
-            handleBanIp(chatId, cmd, userId);
-            return;
-        }
-        if (cmd.startsWith("unbanip ")) {
-            handleUnbanIp(chatId, cmd, userId);
-            return;
-        }
-        if (cmd.startsWith("ban ") || cmd.startsWith("mute ") ||
-                cmd.startsWith("kick ") || cmd.startsWith("unban ") || cmd.startsWith("unmute ")) {
-            handlePunishment(chatId, cmd, userId);
-            return;
-        }
-
-        executeServerCommand(chatId, cmd, userId);
     }
 
-    private void handleLogs(long chatId, String cmd, long userId) {
+    // =========================================================
+    // ==== НАКАЗАНИЯ (BAN, BANUUID, MUTE, KICK, WARN, UNWARN, UNBAN, UNMUTE) =====
+    // =========================================================
+    private void handlePunishment(long chatId, String cmd, long userId, String action) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            String usage = switch (action) {
+                case "ban" -> "!rcon global ban <ник> [время] <причина> [-s]";
+                case "banuuid" -> "!rcon global banuuid <uuid> [время] <причина> [-s]";
+                case "mute" -> "!rcon global mute <ник> [время] <причина> [-s]";
+                case "kick" -> "!rcon global kick <ник> <причина> [-s]";
+                case "warn" -> "!rcon global warn <ник> <причина> [-s]";
+                case "unwarn" -> "!rcon global unwarn <ник> <причина>";
+                case "unban" -> "!rcon global unban <ник> <причина>";
+                case "unmute" -> "!rcon global unmute <ник> <причина>";
+                default -> "!rcon global " + action + " ...";
+            };
+            sendMessage(chatId, "[БОТ] Использование: " + usage);
+            return;
+        }
+
+        boolean hidden = false;
+        String lastArg = parts[parts.length - 1];
+        if (lastArg.equalsIgnoreCase("-s")) {
+            hidden = true;
+            parts = Arrays.copyOf(parts, parts.length - 1);
+        }
+
+        String playerName = parts[1];
+        String duration = "навсегда";
+        String reason;
+        int start = 2;
+
+        // Проверяем, является ли второй аргумент временем (кроме unwarn, unban, unmute, kick, warn)
+        if (!action.equals("unwarn") && !action.equals("unban") && !action.equals("unmute") && !action.equals("kick") && !action.equals("warn")) {
+            if (parts.length > 2 && punishmentManager.isValidTime(parts[2])) {
+                duration = parts[2];
+                start = 3;
+            }
+        }
+
+        if (parts.length > start) {
+            reason = String.join(" ", Arrays.copyOfRange(parts, start, parts.length));
+        } else {
+            if (action.equals("unwarn") || action.equals("unban") || action.equals("unmute")) {
+                reason = "Без причины";
+            } else {
+                sendMessage(chatId, "[БОТ] Вы должны указать причину!");
+                return;
+            }
+        }
+
+        String issuer = plugin.getCustomSender(userId);
+        if (issuer == null) issuer = "RCON@" + userId;
+
+        boolean success = false;
+        String result = "";
+        boolean broadcast = !hidden;
+
+        switch (action) {
+            case "ban":
+                success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, broadcast);
+                if (success) {
+                    String timeStr = duration.equals("навсегда") ? "" : " §fна §b" + punishmentManager.formatDuration(duration) + " §f";
+                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fзабанил §c" + playerName + timeStr + "§fпо причине: §7" + reason + " §8(глобальный)";
+                } else {
+                    result = "[БОТ] " + playerName + " уже забанен!";
+                }
+                break;
+
+            case "banuuid":
+                success = punishmentManager.banUuid(playerName, issuer, reason, duration, hidden, broadcast);
+                if (success) {
+                    String timeStr = duration.equals("навсегда") ? "" : " §fна §b" + punishmentManager.formatDuration(duration) + " §f";
+                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fзабанил §c" + playerName + " (по UUID)" + timeStr + "§fпо причине: §7" + reason + " §8(глобальный)";
+                } else {
+                    result = "[БОТ] " + playerName + " уже забанен или не найден!";
+                }
+                break;
+
+            case "mute":
+                success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, broadcast);
+                if (success) {
+                    String timeStr = duration.equals("навсегда") ? "" : " §fна §b" + punishmentManager.formatDuration(duration) + " §f";
+                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fзамутил §c" + playerName + timeStr + "§fпо причине: §7" + reason + " §8(глобальный)";
+                } else {
+                    result = "[БОТ] " + playerName + " уже замучен!";
+                }
+                break;
+
+            case "kick":
+                success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden, broadcast);
+                if (success) {
+                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fкикнул §c" + playerName + " §fпо причине: §7" + reason + " §8(глобальный)";
+                } else {
+                    result = "[БОТ] " + playerName + " не найден!";
+                }
+                break;
+
+            case "warn":
+                success = punishmentManager.warnPlayer(playerName, issuer, reason, hidden, broadcast);
+                if (success) {
+                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fвыдал предупреждение §c" + playerName + " §fпо причине: §7" + reason + " §8(глобальный)";
+                } else {
+                    result = "[БОТ] Не удалось выдать предупреждение!";
+                }
+                break;
+
+            case "unwarn":
+                success = punishmentManager.unwarnPlayer(playerName, issuer, reason, broadcast);
+                if (success) {
+                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fснял предупреждение §a" + playerName + " §fпо причине: §7" + reason + " §8(глобальный)";
+                } else {
+                    result = "[БОТ] У игрока " + playerName + " нет предупреждений!";
+                }
+                break;
+
+            case "unban":
+                success = punishmentManager.unbanPlayer(playerName, issuer, reason, broadcast);
+                if (success) {
+                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fразбанил §a" + playerName + " §fпо причине: §7" + reason + " §8(глобальный)";
+                } else {
+                    result = "[БОТ] " + playerName + " не забанен!";
+                }
+                break;
+
+            case "unmute":
+                success = punishmentManager.unmutePlayer(playerName, issuer, reason, broadcast);
+                if (success) {
+                    result = "§4❨！❩ §fИгрок §9" + issuer + " §fразмутил §a" + playerName + " §fпо причине: §7" + reason + " §8(глобальный)";
+                } else {
+                    result = "[БОТ] " + playerName + " не замучен!";
+                }
+                break;
+        }
+
+        sendMessage(chatId, result);
+    }
+
+    // =========================================================
+    // ==== BANIP =====
+    // =========================================================
+    private void handleBanIp(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 3) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global banip <ник> [время] <причина> [-s]");
+            return;
+        }
+
+        boolean hidden = false;
+        String lastArg = parts[parts.length - 1];
+        if (lastArg.equalsIgnoreCase("-s")) {
+            hidden = true;
+            parts = Arrays.copyOf(parts, parts.length - 1);
+        }
+
+        String playerName = parts[1];
+        String duration = "навсегда";
+        String reason;
+        int start = 2;
+
+        if (parts.length > 2 && punishmentManager.isValidTime(parts[2])) {
+            duration = parts[2];
+            start = 3;
+        }
+
+        if (parts.length > start) {
+            reason = String.join(" ", Arrays.copyOfRange(parts, start, parts.length));
+        } else {
+            sendMessage(chatId, "[БОТ] Вы должны указать причину!");
+            return;
+        }
+
+        String issuer = plugin.getCustomSender(userId);
+        if (issuer == null) issuer = "RCON@" + userId;
+
+        boolean success = punishmentManager.banIp(playerName, issuer, reason, duration, hidden);
+        if (success) {
+            String timeStr = duration.equals("навсегда") ? "" : " §fна §b" + punishmentManager.formatDuration(duration) + " §f";
+            String msg = "§4❨！❩ §fИгрок §9" + issuer + " §fзабанил IP §c" + playerName + timeStr + "§fпо причине: §7" + reason + " §8(глобальный)";
+            sendMessage(chatId, msg);
+        } else {
+            sendMessage(chatId, "[БОТ] Не удалось забанить IP " + playerName);
+        }
+    }
+
+    // =========================================================
+    // ==== UNBANIP =====
+    // =========================================================
+    private void handleUnbanIp(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 3) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global unbanip <ник> <причина>");
+            return;
+        }
+
+        String playerName = parts[1];
+        String reason = String.join(" ", Arrays.copyOfRange(parts, 2, parts.length));
+        String issuer = plugin.getCustomSender(userId);
+        if (issuer == null) issuer = "RCON@" + userId;
+
+        boolean success = punishmentManager.unbanIp(playerName, issuer, reason);
+        if (success) {
+            String msg = "§4❨！❩ §fИгрок §9" + issuer + " §fразбанил IP §a" + playerName + " §fпо причине: §7" + reason + " §8(глобальный)";
+            sendMessage(chatId, msg);
+        } else {
+            sendMessage(chatId, "[БОТ] IP игрока " + playerName + " не забанен!");
+        }
+    }
+
+    // =========================================================
+    // ==== CHECKBAN =====
+    // =========================================================
+    private void handleCheckBan(long chatId, String cmd) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global checkban <ник>");
+            return;
+        }
+        String playerName = parts[1];
+
+        boolean isBanned = punishmentManager.isBanned(playerName);
+        if (!isBanned) {
+            sendMessage(chatId, "[БОТ] Игрок " + playerName + " не забанен.");
+            return;
+        }
+
+        String issuer = punishmentManager.getBanIssuer(playerName);
+        String reason = punishmentManager.getBanReason(playerName);
+        long expiry = punishmentManager.getBanExpiry(playerName);
+        String expiryStr = expiry == -1 ? "навсегда" : punishmentManager.formatTimeLeft(expiry);
+        boolean isPermanent = expiry == -1;
+
+        PunishmentManager.HistoryEntry entry = punishmentManager.getLastBan(playerName);
+        boolean isHidden = entry != null && entry.hidden;
+        boolean isIpBan = entry != null && entry.ipBan;
+
+        String response = "[БОТ] Ответ сервера:\n";
+        response += "----- " + playerName + " -----\n";
+        response += " Причина: " + reason + "\n";
+        response += " Время: " + punishmentManager.getFormattedDateTime(entry != null ? entry.timestamp : System.currentTimeMillis()) + "\n";
+        response += " Истекает: " + expiryStr + "\n";
+        response += " Сервер: выживание\n";
+        response += " Выдал: " + issuer + "\n";
+        response += " IP: " + (isIpBan ? "да" : "нет") + ", скрыто: " + (isHidden ? "да" : "нет") + ", навсегда: " + (isPermanent ? "да" : "нет");
+
+        sendMessage(chatId, response);
+    }
+
+    // =========================================================
+    // ==== CHECKMUTE =====
+    // =========================================================
+    private void handleCheckMute(long chatId, String cmd) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global checkmute <ник>");
+            return;
+        }
+        String playerName = parts[1];
+
+        boolean isMuted = punishmentManager.isMuted(playerName);
+        if (!isMuted) {
+            sendMessage(chatId, "[БОТ] Игрок " + playerName + " не замучен.");
+            return;
+        }
+
+        String issuer = punishmentManager.getMuteIssuer(playerName);
+        String reason = punishmentManager.getMuteReason(playerName);
+        long expiry = punishmentManager.getMuteExpiry(playerName);
+        String expiryStr = expiry == -1 ? "навсегда" : punishmentManager.formatTimeLeft(expiry);
+        boolean isPermanent = expiry == -1;
+
+        PunishmentManager.HistoryEntry entry = punishmentManager.getLastMute(playerName);
+        boolean isHidden = entry != null && entry.hidden;
+
+        String response = "[БОТ] Ответ сервера:\n";
+        response += "----- " + playerName + " -----\n";
+        response += " Причина: " + reason + "\n";
+        response += " Время: " + punishmentManager.getFormattedDateTime(entry != null ? entry.timestamp : System.currentTimeMillis()) + "\n";
+        response += " Истекает: " + expiryStr + "\n";
+        response += " Сервер: выживание\n";
+        response += " Выдал: " + issuer + "\n";
+        response += " IP: нет, скрыто: " + (isHidden ? "да" : "нет") + ", навсегда: " + (isPermanent ? "да" : "нет");
+
+        sendMessage(chatId, response);
+    }
+
+    // =========================================================
+    // ==== BANLIST =====
+    // =========================================================
+    private void handleBanList(long chatId, String cmd) {
+        int page = 1;
+        String[] parts = cmd.split(" ");
+        if (parts.length > 1) {
+            try { page = Integer.parseInt(parts[1]); } catch (NumberFormatException e) {}
+        }
+        int pageSize = 10;
+        List<String> allBans = punishmentManager.getBanList();
+        List<String> bans = punishmentManager.getBanList(page, pageSize);
+        int totalPages = (int) Math.ceil((double) allBans.size() / pageSize);
+
+        if (bans.isEmpty()) {
+            sendMessage(chatId, "[БОТ] Список банов пуст.");
+        } else {
+            StringBuilder response = new StringBuilder();
+            response.append("[БОТ] Список банов (Страница ").append(page).append("/").append(totalPages).append(")\n");
+            response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            for (String ban : bans) {
+                response.append(ban).append("\n");
+            }
+            response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            if (totalPages > 1) {
+                response.append("Используй: !rcon global banlist ").append(page + 1);
+            }
+            sendMessage(chatId, response.toString());
+        }
+    }
+
+    // =========================================================
+    // ==== MUTELIST =====
+    // =========================================================
+    private void handleMuteList(long chatId, String cmd) {
+        int page = 1;
+        String[] parts = cmd.split(" ");
+        if (parts.length > 1) {
+            try { page = Integer.parseInt(parts[1]); } catch (NumberFormatException e) {}
+        }
+        int pageSize = 10;
+        List<String> allMutes = punishmentManager.getMuteList();
+        List<String> mutes = punishmentManager.getMuteList(page, pageSize);
+        int totalPages = (int) Math.ceil((double) allMutes.size() / pageSize);
+
+        if (mutes.isEmpty()) {
+            sendMessage(chatId, "[БОТ] Список мутов пуст.");
+        } else {
+            StringBuilder response = new StringBuilder();
+            response.append("[БОТ] Список мутов (Страница ").append(page).append("/").append(totalPages).append(")\n");
+            response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            for (String mute : mutes) {
+                response.append(mute).append("\n");
+            }
+            response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            if (totalPages > 1) {
+                response.append("Используй: !rcon global mutelist ").append(page + 1);
+            }
+            sendMessage(chatId, response.toString());
+        }
+    }
+
+    // =========================================================
+    // ==== LOGS =====
+    // =========================================================
+    private void handleLogs(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
             sendMessage(chatId, "[БОТ] Использование: !rcon global logs <ник> [кол-во]");
@@ -620,7 +761,10 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, response);
     }
 
-    private void handleShist(long chatId, String cmd, long userId) {
+    // =========================================================
+    // ==== SHIST =====
+    // =========================================================
+    private void handleShist(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
             sendMessage(chatId, "[БОТ] Использование: !rcon global shist <ник> [кол-во]");
@@ -639,7 +783,10 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, response);
     }
 
-    private void handleHist(long chatId, String cmd, long userId) {
+    // =========================================================
+    // ==== HIST =====
+    // =========================================================
+    private void handleHist(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
             sendMessage(chatId, "[БОТ] Использование: !rcon global hist <ник> [кол-во]");
@@ -658,7 +805,10 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, response);
     }
 
-    private void handleDupeip(long chatId, String cmd, long userId) {
+    // =========================================================
+    // ==== DUPEIP =====
+    // =========================================================
+    private void handleDupeip(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
             sendMessage(chatId, "[БОТ] Использование: !rcon global dupeip <ник>");
@@ -688,7 +838,10 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, response.toString());
     }
 
-    private void handlePexUser(long chatId, String cmd, long userId) {
+    // =========================================================
+    // ==== PEX USER =====
+    // =========================================================
+    private void handlePexUser(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
         if (parts.length < 3) {
             sendMessage(chatId, "[БОТ] Использование: !rcon global pex user <ник>");
@@ -756,6 +909,9 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, response);
     }
 
+    // =========================================================
+    // ==== BROADCAST =====
+    // =========================================================
     private void handleBroadcast(long chatId, String cmd, long userId) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
@@ -773,298 +929,9 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, "[БОТ] Ответ от сервера:\n[Объявление] " + message + " (пишет: " + sender + ")");
     }
 
-    private void handlePunishment(long chatId, String cmd, long userId) {
-        String[] parts = cmd.split(" ");
-        String action = parts[0];
-        String playerName = parts[1];
-
-        boolean hidden = false;
-        String lastArg = parts[parts.length - 1];
-        if (lastArg.equalsIgnoreCase("-s")) {
-            hidden = true;
-            parts = Arrays.copyOf(parts, parts.length - 1);
-        }
-
-        String duration = "навсегда";
-        String reason = "";
-        int start = 2;
-        int end = parts.length;
-
-        if (end > start + 1 && punishmentManager.isValidTime(parts[2])) {
-            duration = parts[2];
-            start = 3;
-        }
-
-        if (end > start) {
-            reason = String.join(" ", Arrays.copyOfRange(parts, start, end));
-        } else {
-            reason = "Без причины";
-        }
-
-        String issuer = plugin.getCustomSender(userId);
-        if (issuer == null) issuer = "RCON@" + userId;
-
-        String coloredReason = reason.replace('&', '§');
-
-        boolean success = false;
-        String result = "";
-        boolean broadcast = !hidden;
-
-        switch (action) {
-            case "ban":
-                success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, broadcast);
-                if (success) {
-                    result = "[БОТ] Ответ сервера:\n";
-                    if (hidden) {
-                        result += "[Скрыто] ❨！❩ Игрок " + issuer + " забанил " + playerName +
-                                " на " + duration + " по причине: " + coloredReason + " (глобальный)";
-                    } else {
-                        result += "❨！❩ Игрок " + issuer + " забанил " + playerName +
-                                " на " + duration + " по причине: " + coloredReason + " (глобальный)";
-                    }
-                } else {
-                    result = "[БОТ] " + playerName + " уже забанен!";
-                }
-                break;
-
-            case "mute":
-                success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, broadcast);
-                if (success) {
-                    result = "[БОТ] Ответ сервера:\n";
-                    if (hidden) {
-                        result += "[Скрыто] ❨！❩ Игрок " + issuer + " замутил " + playerName +
-                                " на " + duration + " по причине: " + coloredReason + " (глобальный)";
-                    } else {
-                        result += "❨！❩ Игрок " + issuer + " замутил " + playerName +
-                                " на " + duration + " по причине: " + coloredReason + " (глобальный)";
-                    }
-                } else {
-                    result = "[БОТ] " + playerName + " уже замучен!";
-                }
-                break;
-
-            case "kick":
-                success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden, broadcast);
-                if (success) {
-                    result = "[БОТ] Ответ сервера:\n";
-                    if (hidden) {
-                        result += "[Скрыто] ❨！❩ Игрок " + issuer + " кикнул " + playerName +
-                                " по причине: " + coloredReason + " (глобальный)";
-                    } else {
-                        result += "❨！❩ Игрок " + issuer + " кикнул " + playerName +
-                                " по причине: " + coloredReason + " (глобальный)";
-                    }
-                } else {
-                    result = "[БОТ] " + playerName + " не найден!";
-                }
-                break;
-
-            case "unban":
-                success = punishmentManager.unbanPlayer(playerName, issuer, reason, broadcast);
-                if (success) {
-                    result = "[БОТ] Ответ сервера:\n❨！❩ Игрок " + issuer + " разбанил " + playerName +
-                            " по причине: " + coloredReason + " (глобальный)";
-                } else {
-                    result = "[БОТ] " + playerName + " не забанен!";
-                }
-                break;
-
-            case "unmute":
-                success = punishmentManager.unmutePlayer(playerName, issuer, reason, broadcast);
-                if (success) {
-                    result = "[БОТ] Ответ сервера:\n❨！❩ Игрок " + issuer + " размутил " + playerName +
-                            " по причине: " + coloredReason + " (глобальный)";
-                } else {
-                    result = "[БОТ] " + playerName + " не замучен!";
-                }
-                break;
-        }
-
-        sendMessage(chatId, result);
-    }
-
-    private void handleCheckBan(long chatId, String cmd) {
-        String[] parts = cmd.split(" ");
-        if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global checkban <ник>");
-            return;
-        }
-        String playerName = parts[1];
-
-        boolean isBanned = punishmentManager.isBanned(playerName);
-        if (!isBanned) {
-            sendMessage(chatId, "[БОТ] Игрок " + playerName + " не забанен.");
-            return;
-        }
-
-        String issuer = punishmentManager.getBanIssuer(playerName);
-        String reason = punishmentManager.getBanReason(playerName);
-        String expiry = punishmentManager.getBanExpiry(playerName);
-        PunishmentManager.HistoryEntry entry = punishmentManager.getLastBan(playerName);
-
-        String isHidden = entry.hidden ? "да" : "нет";
-        String isPermanent = entry.duration.equals("навсегда") ? "да" : "нет";
-        String ipInfo = "нет";
-
-        String response = "[БОТ] Ответ сервера:\n";
-        response += "----- " + playerName + " -----\n";
-        response += " Причина: " + reason + "\n";
-        response += " Время: " + punishmentManager.getFormattedDateTime(entry.timestamp) + "\n";
-        response += " Истекает: " + expiry + "\n";
-        response += " Сервер: выживание\n";
-        response += " Выдал: " + issuer + "\n";
-        response += " IP: " + ipInfo + ", скрыто: " + isHidden + ", навсегда: " + isPermanent;
-
-        sendMessage(chatId, response);
-    }
-
-    private void handleCheckMute(long chatId, String cmd) {
-        String[] parts = cmd.split(" ");
-        if (parts.length < 2) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global checkmute <ник>");
-            return;
-        }
-        String playerName = parts[1];
-
-        boolean isMuted = punishmentManager.isMuted(playerName);
-        if (!isMuted) {
-            sendMessage(chatId, "[БОТ] Игрок " + playerName + " не замучен.");
-            return;
-        }
-
-        String issuer = punishmentManager.getMuteIssuer(playerName);
-        String reason = punishmentManager.getMuteReason(playerName);
-        String expiry = punishmentManager.getMuteExpiry(playerName);
-        PunishmentManager.HistoryEntry entry = punishmentManager.getLastMute(playerName);
-
-        String isHidden = entry.hidden ? "да" : "нет";
-        String isPermanent = entry.duration.equals("навсегда") ? "да" : "нет";
-
-        String response = "[БОТ] Ответ сервера:\n";
-        response += "----- " + playerName + " -----\n";
-        response += " Причина: " + reason + "\n";
-        response += " Время: " + punishmentManager.getFormattedDateTime(entry.timestamp) + "\n";
-        response += " Истекает: " + expiry + "\n";
-        response += " Сервер: выживание\n";
-        response += " Выдал: " + issuer + "\n";
-        response += " IP: нет, скрыто: " + isHidden + ", навсегда: " + isPermanent;
-
-        sendMessage(chatId, response);
-    }
-
-    // ===== BANIP =====
-    private void handleBanIp(long chatId, String cmd, long userId) {
-        String[] parts = cmd.split(" ");
-        if (parts.length < 4) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global banip <ник> <время> <причина> [-s]");
-            return;
-        }
-
-        boolean hidden = false;
-        String lastArg = parts[parts.length - 1];
-        if (lastArg.equalsIgnoreCase("-s")) {
-            hidden = true;
-            parts = Arrays.copyOf(parts, parts.length - 1);
-        }
-
-        String playerName = parts[1];
-        String duration = parts[2];
-        String reason = String.join(" ", Arrays.copyOfRange(parts, 3, parts.length));
-        String issuer = plugin.getCustomSender(userId);
-        if (issuer == null) issuer = "RCON@" + userId;
-
-        Player target = Bukkit.getPlayer(playerName);
-        if (target == null) {
-            sendMessage(chatId, "[БОТ] Игрок " + playerName + " не найден на сервере!");
-            return;
-        }
-
-        boolean success = punishmentManager.banIp(playerName, issuer, reason, duration, hidden);
-        if (success) {
-            String coloredReason = reason.replace('&', '§');
-            sendMessage(chatId, "[БОТ] IP игрока " + playerName + " забанен на " + duration + " по причине: " + coloredReason);
-        } else {
-            sendMessage(chatId, "[БОТ] Не удалось забанить IP " + playerName);
-        }
-    }
-
-    private void handleUnbanIp(long chatId, String cmd, long userId) {
-        String[] parts = cmd.split(" ");
-        if (parts.length < 3) {
-            sendMessage(chatId, "[БОТ] Использование: !rcon global unbanip <ник> <причина>");
-            return;
-        }
-
-        String playerName = parts[1];
-        String reason = String.join(" ", Arrays.copyOfRange(parts, 2, parts.length));
-        String issuer = plugin.getCustomSender(userId);
-        if (issuer == null) issuer = "RCON@" + userId;
-
-        boolean success = punishmentManager.unbanIp(playerName, issuer, reason);
-        if (success) {
-            String coloredReason = reason.replace('&', '§');
-            sendMessage(chatId, "[БОТ] IP игрока " + playerName + " разбанен по причине: " + coloredReason);
-        } else {
-            sendMessage(chatId, "[БОТ] IP игрока " + playerName + " не забанен!");
-        }
-    }
-
-    private void handleBanList(long chatId, String cmd) {
-        int page = 1;
-        String[] parts = cmd.split(" ");
-        if (parts.length > 1) {
-            try { page = Integer.parseInt(parts[1]); } catch (NumberFormatException e) {}
-        }
-        int pageSize = 10;
-        List<String> allBans = punishmentManager.getBanList();
-        List<String> bans = punishmentManager.getBanList(page, pageSize);
-        int totalPages = (int) Math.ceil((double) allBans.size() / pageSize);
-
-        if (bans.isEmpty()) {
-            sendMessage(chatId, "[БОТ] Список банов пуст.");
-        } else {
-            StringBuilder response = new StringBuilder();
-            response.append("[БОТ] Список банов (Страница ").append(page).append("/").append(totalPages).append(")\n");
-            response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-            for (String ban : bans) {
-                response.append(ban).append("\n");
-            }
-            response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-            if (totalPages > 1) {
-                response.append("Используй: !rcon global banlist ").append(page + 1);
-            }
-            sendMessage(chatId, response.toString());
-        }
-    }
-
-    private void handleMuteList(long chatId, String cmd) {
-        int page = 1;
-        String[] parts = cmd.split(" ");
-        if (parts.length > 1) {
-            try { page = Integer.parseInt(parts[1]); } catch (NumberFormatException e) {}
-        }
-        int pageSize = 10;
-        List<String> allMutes = punishmentManager.getMuteList();
-        List<String> mutes = punishmentManager.getMuteList(page, pageSize);
-        int totalPages = (int) Math.ceil((double) allMutes.size() / pageSize);
-
-        if (mutes.isEmpty()) {
-            sendMessage(chatId, "[БОТ] Список мутов пуст.");
-        } else {
-            StringBuilder response = new StringBuilder();
-            response.append("[БОТ] Список мутов (Страница ").append(page).append("/").append(totalPages).append(")\n");
-            response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-            for (String mute : mutes) {
-                response.append(mute).append("\n");
-            }
-            response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-            if (totalPages > 1) {
-                response.append("Используй: !rcon global mutelist ").append(page + 1);
-            }
-            sendMessage(chatId, response.toString());
-        }
-    }
-
+    // =========================================================
+    // ==== CONFIRM =====
+    // =========================================================
     private void handleConfirm(long chatId, String data, int messageId) {
         String[] parts = data.split("_");
         String action = parts[1];
@@ -1083,7 +950,8 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             case "ban":
                 success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, !hidden);
                 if (success) {
-                    result = "[БОТ] " + issuer + " забанил " + playerName + " на " + duration + " по причине: " + reason;
+                    String timeStr = duration.equals("навсегда") ? "" : " на " + duration;
+                    result = "[БОТ] " + issuer + " забанил " + playerName + timeStr + " по причине: " + reason;
                     if (hidden) result += " (СКРЫТО)";
                 } else {
                     result = "[БОТ] " + playerName + " уже забанен!";
@@ -1093,7 +961,8 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             case "mute":
                 success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, !hidden);
                 if (success) {
-                    result = "[БОТ] " + issuer + " замутил " + playerName + " на " + duration + " по причине: " + reason;
+                    String timeStr = duration.equals("навсегда") ? "" : " на " + duration;
+                    result = "[БОТ] " + issuer + " замутил " + playerName + timeStr + " по причине: " + reason;
                     if (hidden) result += " (СКРЫТО)";
                 } else {
                     result = "[БОТ] " + playerName + " уже замучен!";
@@ -1137,6 +1006,9 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         sendMessage(chatId, result);
     }
 
+    // =========================================================
+    // ==== PAGINATION =====
+    // =========================================================
     private void handlePagination(long chatId, String type, String playerName, int page, int messageId) {
         int pageSize = 10;
         List<String> items = new ArrayList<>();
@@ -1217,6 +1089,9 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
     }
 
+    // =========================================================
+    // ==== EXECUTE SERVER COMMAND =====
+    // =========================================================
     private void executeServerCommand(long chatId, String command, long userId) {
         String issuer = plugin.getCustomSender(userId);
         if (issuer == null) issuer = "RCON@" + userId;
@@ -1244,6 +1119,10 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             sendMessage(finalChatId, "[БОТ] Ответ от сервера:\nКоманда выполнена: " + finalCommand);
         });
     }
+
+    // =========================================================
+    // ==== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ =====
+    // =========================================================
 
     public void sendMessage(long chatId, String text) {
         SendMessage message = new SendMessage();
