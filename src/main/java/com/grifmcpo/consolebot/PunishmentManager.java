@@ -37,8 +37,9 @@ public class PunishmentManager implements Listener {
     private final Map<String, String> ipBanIssuers = new ConcurrentHashMap<>();
     private final Map<String, String> ipBanReasons = new ConcurrentHashMap<>();
     private final Map<String, List<WarnEntry>> warns = new ConcurrentHashMap<>();
+    private final Map<String, Long> playerJoinTimes = new ConcurrentHashMap<>();
 
-    private final List<String> allowedCommands = Arrays.asList("msg", "tell", "r", "reply", "help", "pay", "balance", "bal");
+    private final List<String> allowedCommands = Arrays.asList("msg", "tell", "r", "reply", "help", "pay", "balance", "bal", "me", "emote");
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
 
     public PunishmentManager(JavaPlugin plugin, AdminLogger adminLogger) {
@@ -121,6 +122,7 @@ public class PunishmentManager implements Listener {
                             bans.put(playerName, expiry);
                             banIssuers.put(playerName, he.issuer);
                             banReasons.put(playerName, he.reason);
+                            // Запоминаем что бан есть даже для офлайн игроков
                         }
                     }
                     break;
@@ -234,11 +236,11 @@ public class PunishmentManager implements Listener {
     // ==== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ =====
     // =========================================================
 
-    private String colorize(String text) {
+    public String colorize(String text) {
         return ChatColor.translateAlternateColorCodes('&', text);
     }
 
-    private String getReason(String reason) {
+    public String getReason(String reason) {
         if (reason == null || reason.isEmpty()) return "§7Без причины";
         if (reason.contains("&")) {
             return colorize(reason);
@@ -251,7 +253,7 @@ public class PunishmentManager implements Listener {
         return dateFormat.format(new Date(expiry));
     }
 
-    private String getBanMessage(String playerName, String issuer, String reason, long expiry, boolean ipBan) {
+    public String getBanMessage(String playerName, String issuer, String reason, long expiry, boolean ipBan) {
         StringBuilder sb = new StringBuilder();
         sb.append("§c§lВаш аккаунт заблокирован!\n\n");
         sb.append("§fПричина: ").append(getReason(reason)).append("\n");
@@ -268,7 +270,7 @@ public class PunishmentManager implements Listener {
         return sb.toString();
     }
 
-    private String getMuteMessage(String playerName, String issuer, String reason, long expiry) {
+    public String getMuteMessage(String playerName, String issuer, String reason, long expiry) {
         StringBuilder sb = new StringBuilder();
         sb.append("§c§lВам заблокировали чат!\n\n");
         sb.append("§fПричина: ").append(getReason(reason)).append("\n");
@@ -281,7 +283,7 @@ public class PunishmentManager implements Listener {
     }
 
     // =========================================================
-    // ==== БАН =====
+    // ==== БАН (с поддержкой офлайн игроков) =====
     // =========================================================
     public boolean banPlayer(String playerName, String issuer, String reason, String duration, boolean hidden, boolean broadcast) {
         if (isBanned(playerName)) {
@@ -317,11 +319,13 @@ public class PunishmentManager implements Listener {
             banIssuers.put(finalPlayerName, finalIssuer);
             banReasons.put(finalPlayerName, finalReason);
 
+            // Кикаем если онлайн
             Player player = Bukkit.getPlayer(finalPlayerName);
             if (player != null && player.isOnline()) {
                 player.kickPlayer(getBanMessage(finalPlayerName, finalIssuer, finalReason, expiry, false));
             }
 
+            // Сообщение в чат (с пробелом!)
             if (finalBroadcast && !finalHidden) {
                 String timeStr = finalDuration.equals("навсегда") ? "" : " §fна §b" + formatDuration(finalDuration) + " §f";
                 String msg = "§4❨！❩ §fИгрок §9" + finalIssuer + " §fзабанил §c" + finalPlayerName + 
@@ -565,16 +569,25 @@ public class PunishmentManager implements Listener {
     }
 
     // =========================================================
-    // ==== IP БАН =====
+    // ==== IP БАН (с поддержкой офлайн игроков) =====
     // =========================================================
     public boolean banIp(String playerName, String issuer, String reason, String duration, boolean hidden) {
-        Player player = Bukkit.getPlayer(playerName);
-        if (player == null) {
-            return false;
+        // Проверяем есть ли у нас IP игрока в истории
+        String ip = getPlayerIp(playerName);
+        
+        // Если IP не найден, пробуем получить у онлайн игрока
+        if (ip == null || ip.equals("—") || ip.equals("0.0.0.0")) {
+            Player player = Bukkit.getPlayer(playerName);
+            if (player != null && player.getAddress() != null) {
+                ip = player.getAddress().getHostString();
+            } else {
+                // Если игрока нет онлайн и IP не найден, создаем бан с пометкой что IP будет забанен при заходе
+                plugin.getLogger().info("⚠ IP для " + playerName + " не найден, бан IP будет применен при заходе игрока");
+                // Сохраняем бан в историю без IP
+                banPlayer(playerName, issuer, reason, duration, hidden, true);
+                return true;
+            }
         }
-
-        String ip = player.getAddress() != null ? player.getAddress().getHostString() : "—";
-        if (ip.equals("—")) return false;
 
         if (duration == null || duration.isEmpty()) {
             duration = "навсегда";
@@ -610,6 +623,11 @@ public class PunishmentManager implements Listener {
             entry.ipBan = true;
             addHistorySync(finalPlayerName, entry);
 
+            // Также добавляем обычный бан
+            bans.put(finalPlayerName, expiry);
+            banIssuers.put(finalPlayerName, finalIssuer);
+            banReasons.put(finalPlayerName, finalReason);
+
             Player p = Bukkit.getPlayer(finalPlayerName);
             if (p != null && p.isOnline()) {
                 p.kickPlayer(getBanMessage(finalPlayerName, finalIssuer, finalReason, expiry, true));
@@ -642,6 +660,10 @@ public class PunishmentManager implements Listener {
             ipBanExpiry.remove(finalPlayerName);
             ipBanIssuers.remove(finalPlayerName);
             ipBanReasons.remove(finalPlayerName);
+            // Также снимаем обычный бан
+            bans.remove(finalPlayerName);
+            banIssuers.remove(finalPlayerName);
+            banReasons.remove(finalPlayerName);
 
             String msg = "§4❨！❩ §fИгрок §9" + finalIssuer + " §fразбанил IP §a" + finalPlayerName + 
                          " §fпо причине: §7" + getReason(finalReason) + " §8(глобальный)";
@@ -666,6 +688,25 @@ public class PunishmentManager implements Listener {
         }
         
         return bannedIps.get(playerName).contains(ip);
+    }
+
+    public String getPlayerIp(String playerName) {
+        // Ищем в истории
+        List<HistoryEntry> list = history.get(playerName);
+        if (list != null && !list.isEmpty()) {
+            for (HistoryEntry entry : list) {
+                if (entry.reason != null && entry.reason.contains("IP: ")) {
+                    String ip = entry.reason.substring(entry.reason.indexOf("IP: ") + 4);
+                    if (ip.contains(")")) {
+                        ip = ip.substring(0, ip.indexOf(")"));
+                    }
+                    if (ip.matches("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}")) {
+                        return ip;
+                    }
+                }
+            }
+        }
+        return "—";
     }
 
     // =========================================================
@@ -750,28 +791,45 @@ public class PunishmentManager implements Listener {
         Player player = event.getPlayer();
         String playerName = player.getName();
         String ip = player.getAddress() != null ? player.getAddress().getHostString() : "—";
+        UUID uuid = player.getUniqueId();
 
+        plugin.getLogger().info("🔍 ПРОВЕРКА ВХОДА: " + playerName + " | БАН=" + isBanned(playerName) + " | IP БАН=" + isIpBanned(playerName, ip));
+
+        // Проверяем IP бан
         if (isIpBanned(playerName, ip)) {
             long expiry = ipBanExpiry.getOrDefault(playerName, -1L);
             String issuer = ipBanIssuers.getOrDefault(playerName, "Администрация");
             String reason = ipBanReasons.getOrDefault(playerName, "IP бан");
+            plugin.getLogger().info("❌ IP БАН для " + playerName);
             event.disallow(PlayerLoginEvent.Result.KICK_BANNED, getBanMessage(playerName, issuer, reason, expiry, true));
             return;
         }
 
+        // Проверяем обычный бан
         if (isBanned(playerName)) {
             long expiry = bans.getOrDefault(playerName, -1L);
             String issuer = banIssuers.getOrDefault(playerName, "Администрация");
             String reason = banReasons.getOrDefault(playerName, "Без причины");
+            plugin.getLogger().info("❌ БАН ДЛЯ " + playerName + " НАЙДЕН! Кикаем...");
             event.disallow(PlayerLoginEvent.Result.KICK_BANNED, getBanMessage(playerName, issuer, reason, expiry, false));
+            return;
         }
+
+        // Сохраняем время входа для /seen
+        playerJoinTimes.put(playerName, System.currentTimeMillis());
+        plugin.getLogger().info("✅ ВХОД РАЗРЕШЕН для " + playerName);
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         String playerName = player.getName();
+        UUID uuid = player.getUniqueId();
 
+        // Обновляем время входа
+        playerJoinTimes.put(playerName, System.currentTimeMillis());
+
+        // Проверяем бан при входе
         if (isBanned(playerName)) {
             long expiry = bans.getOrDefault(playerName, -1L);
             String issuer = banIssuers.getOrDefault(playerName, "Администрация");
@@ -807,6 +865,116 @@ public class PunishmentManager implements Listener {
             event.setCancelled(true);
             player.sendMessage("§cВы не можете использовать команды во время мута!");
         }
+    }
+
+    // =========================================================
+    // ==== SEEN =====
+    // =========================================================
+    public String getSeenInfo(String playerName, boolean isOnline) {
+        StringBuilder sb = new StringBuilder();
+        UUID uuid = getPlayerUuid(playerName);
+        
+        if (isOnline) {
+            Player player = Bukkit.getPlayer(playerName);
+            if (player != null) {
+                long joinTime = playerJoinTimes.getOrDefault(playerName, System.currentTimeMillis());
+                long onlineTime = System.currentTimeMillis() - joinTime;
+                String timeStr = formatTime(onlineTime);
+                sb.append("§6Игрок §c").append(playerName).append(" §aонлайн §6в течение §c").append(timeStr).append("\n");
+                sb.append(" §6- §6UUID: §f").append(uuid != null ? uuid.toString() : "—");
+            }
+        } else {
+            long offlineTime = System.currentTimeMillis() - playerJoinTimes.getOrDefault(playerName, System.currentTimeMillis());
+            String timeStr = formatTime(offlineTime);
+            boolean isWhitelisted = isPlayerWhitelisted(playerName);
+            
+            sb.append("§6Игрок §c").append(playerName).append(" §4офлайн §6в течение §c").append(timeStr).append("\n");
+            sb.append(" §6- §6UUID: §f").append(uuid != null ? uuid.toString() : "—").append("\n");
+            sb.append(" §6- §6В белом списке: ").append(isWhitelisted ? "§aправда" : "§4ложь").append("\n");
+            
+            // Получаем последнюю известную локацию
+            String location = getPlayerLastLocation(playerName);
+            if (location != null && !location.isEmpty()) {
+                sb.append(" §6- §6Местоположение: §f").append(location);
+            }
+        }
+        
+        return sb.toString();
+    }
+
+    private UUID getPlayerUuid(String playerName) {
+        Player player = Bukkit.getPlayer(playerName);
+        if (player != null) {
+            return player.getUniqueId();
+        }
+        // Пытаемся найти UUID через usercache
+        try {
+            File usercache = new File("usercache.json");
+            if (usercache.exists()) {
+                String content = new String(java.nio.file.Files.readAllBytes(usercache.toPath()));
+                int idx = content.indexOf("\"name\":\"" + playerName + "\"");
+                if (idx != -1) {
+                    int uuidIdx = content.lastIndexOf("\"uuid\":\"", idx);
+                    if (uuidIdx != -1) {
+                        String uuidStr = content.substring(uuidIdx + 9, content.indexOf("\"", uuidIdx + 10));
+                        return UUID.fromString(uuidStr);
+                    }
+                }
+            }
+        } catch (Exception e) {}
+        return null;
+    }
+
+    private boolean isPlayerWhitelisted(String playerName) {
+        try {
+            File whitelist = new File("whitelist.json");
+            if (whitelist.exists()) {
+                String content = new String(java.nio.file.Files.readAllBytes(whitelist.toPath()));
+                return content.contains("\"name\":\"" + playerName + "\"");
+            }
+        } catch (Exception e) {}
+        return false;
+    }
+
+    private String getPlayerLastLocation(String playerName) {
+        // Пытаемся получить из истории или других источников
+        try {
+            File logs = new File("logs");
+            if (logs.exists()) {
+                File latestLog = new File(logs, "latest.log");
+                if (latestLog.exists()) {
+                    String content = new String(java.nio.file.Files.readAllBytes(latestLog.toPath()));
+                    String[] lines = content.split("\n");
+                    for (int i = lines.length - 1; i >= 0; i--) {
+                        if (lines[i].contains(playerName) && lines[i].contains("joined")) {
+                            // Можно попытаться извлечь координаты, но обычно их нет в логах
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {}
+        return "неизвестно";
+    }
+
+    private String formatTime(long millis) {
+        long seconds = millis / 1000;
+        long minutes = seconds / 60;
+        long hours = minutes / 60;
+        long days = hours / 24;
+        
+        seconds %= 60;
+        minutes %= 60;
+        hours %= 24;
+        
+        StringBuilder sb = new StringBuilder();
+        if (days > 0) sb.append(days).append("д ");
+        if (hours > 0) sb.append(hours).append("ч ");
+        if (minutes > 0 && hours == 0) sb.append(minutes).append("м ");
+        if (seconds > 0 && minutes == 0 && hours == 0) sb.append(seconds).append("с");
+        
+        if (sb.length() == 0) return "только что";
+        return sb.toString().trim();
     }
 
     // =========================================================
@@ -942,7 +1110,7 @@ public class PunishmentManager implements Listener {
     public String getFormattedHistory(String playerName, int limit) {
         List<HistoryEntry> historyList = getHistory(playerName);
         if (historyList.isEmpty()) {
-            return "[БОТ] Нет наказаний для " + playerName;
+            return "[БОТ] Ответ от сервера:\nНет наказаний для " + playerName;
         }
 
         historyList.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
@@ -952,7 +1120,7 @@ public class PunishmentManager implements Listener {
             .collect(Collectors.toList());
 
         StringBuilder sb = new StringBuilder();
-        sb.append("[БОТ] Ответ сервера:\n");
+        sb.append("[БОТ] Ответ от сервера:\n");
         sb.append("История нарушений игрока ").append(playerName)
           .append(" (Записей: ").append(historyList.size()).append(")\n");
 
@@ -992,7 +1160,7 @@ public class PunishmentManager implements Listener {
         }
 
         if (allHistory.isEmpty()) {
-            return "[БОТ] " + issuerName + " не выдавал наказаний";
+            return "[БОТ] Ответ от сервера:\n" + issuerName + " не выдавал наказаний";
         }
 
         allHistory.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
@@ -1002,7 +1170,7 @@ public class PunishmentManager implements Listener {
             .collect(Collectors.toList());
 
         StringBuilder sb = new StringBuilder();
-        sb.append("[БОТ] Ответ сервера:\n");
+        sb.append("[БОТ] Ответ от сервера:\n");
         sb.append("История наказаний игроком ").append(issuerName)
           .append(" (Записей: ").append(allHistory.size()).append(")\n");
 
