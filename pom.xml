@@ -29,11 +29,6 @@
             <id>central</id>
             <url>https://repo1.maven.org/maven2/</url>
         </repository>
-        <!-- LuckPerms репозиторий -->
-        <repository>
-            <id>luckperms</id>
-            <url>https://repo.luckperms.net/</url>
-        </repository>
     </repositories>
 
     <dependencies>
@@ -63,14 +58,6 @@
             <groupId>com.github.MilkBowl</groupId>
             <artifactId>VaultAPI</artifactId>
             <version>1.7</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- LuckPerms API (из официального репозитория) -->
-        <dependency>
-            <groupId>net.luckperms</groupId>
-            <artifactId>luckperms-api</artifactId>
-            <version>5.4</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
