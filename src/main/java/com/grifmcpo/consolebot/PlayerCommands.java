@@ -1,5 +1,8 @@
 package com.grifmcpo.consolebot;
 
+import net.luckperms.api.LuckPerms;
+import net.luckperms.api.model.group.Group;
+import net.luckperms.api.model.user.User;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -7,8 +10,8 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.io.File;
-import java.util.Arrays;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class PlayerCommands implements CommandExecutor {
 
@@ -17,7 +20,7 @@ public class PlayerCommands implements CommandExecutor {
     private final PlayerManager playerManager;
     private final CommandLogger commandLogger;
 
-    public PlayerCommands(TelegramConsoleBot plugin, PunishmentManager punishmentManager, 
+    public PlayerCommands(TelegramConsoleBot plugin, PunishmentManager punishmentManager,
                           PlayerManager playerManager, CommandLogger commandLogger) {
         this.plugin = plugin;
         this.punishmentManager = punishmentManager;
@@ -46,12 +49,10 @@ public class PlayerCommands implements CommandExecutor {
                 return handleBroadcast(sender, args);
             case "logs":
                 return handleLogs(sender, args);
-            case "hist":
-                return handleHist(sender, args);
-            case "shist":
-                return handleShist(sender, args);
             case "dupeip":
                 return handleDupeip(sender, args);
+            case "seen":
+                return handleSeen(sender, args);
             case "pex":
                 return handlePex(sender, args);
             default:
@@ -365,58 +366,6 @@ public class PlayerCommands implements CommandExecutor {
     }
 
     // =========================================================
-    // ==== HIST =====
-    // =========================================================
-    private boolean handleHist(CommandSender sender, String[] args) {
-        if (!sender.hasPermission("telegramconsolebot.hist")) {
-            sender.sendMessage("§cУ вас нет прав на использование этой команды!");
-            return true;
-        }
-
-        if (args.length < 1) {
-            sender.sendMessage("§cИспользование: /hist <ник> [кол-во]");
-            return true;
-        }
-
-        String playerName = args[0];
-        int limit = 10;
-        if (args.length >= 2) {
-            try { limit = Integer.parseInt(args[1]); } catch (NumberFormatException e) {}
-        }
-
-        String response = punishmentManager.getFormattedHistory(playerName, limit);
-        sender.sendMessage(response.replace("[БОТ] Ответ сервера:\n", ""));
-        commandLogger.logCommand(sender.getName(), "hist " + playerName);
-        return true;
-    }
-
-    // =========================================================
-    // ==== SHIST =====
-    // =========================================================
-    private boolean handleShist(CommandSender sender, String[] args) {
-        if (!sender.hasPermission("telegramconsolebot.shists")) {
-            sender.sendMessage("§cУ вас нет прав на использование этой команды!");
-            return true;
-        }
-
-        if (args.length < 1) {
-            sender.sendMessage("§cИспользование: /shist <ник> [кол-во]");
-            return true;
-        }
-
-        String playerName = args[0];
-        int limit = 10;
-        if (args.length >= 2) {
-            try { limit = Integer.parseInt(args[1]); } catch (NumberFormatException e) {}
-        }
-
-        String response = punishmentManager.getFormattedShist(playerName, limit);
-        sender.sendMessage(response.replace("[БОТ] Ответ сервера:\n", ""));
-        commandLogger.logCommand(sender.getName(), "shist " + playerName);
-        return true;
-    }
-
-    // =========================================================
     // ==== DUPEIP =====
     // =========================================================
     private boolean handleDupeip(CommandSender sender, String[] args) {
@@ -457,6 +406,70 @@ public class PlayerCommands implements CommandExecutor {
     }
 
     // =========================================================
+    // ==== SEEN =====
+    // =========================================================
+    private boolean handleSeen(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("telegramconsolebot.seen")) {
+            sender.sendMessage("§cУ вас нет прав на использование этой команды!");
+            return true;
+        }
+
+        if (args.length < 1) {
+            sender.sendMessage("§cИспользование: /seen <ник>");
+            return true;
+        }
+
+        String playerName = args[0];
+        Player target = Bukkit.getPlayer(playerName);
+        boolean isOnline = target != null && target.isOnline();
+
+        // Проверка прав по группам LuckPerms
+        if (sender instanceof Player) {
+            Player senderPlayer = (Player) sender;
+            try {
+                LuckPerms luckPerms = Bukkit.getServicesManager().getRegistration(LuckPerms.class).getProvider();
+                if (luckPerms != null) {
+                    User senderUser = luckPerms.getUserManager().getUser(senderPlayer.getUniqueId());
+                    User targetUser = luckPerms.getUserManager().getUser(playerName);
+                    
+                    if (senderUser != null && targetUser != null) {
+                        String senderGroup = senderUser.getPrimaryGroup();
+                        String targetGroup = targetUser.getPrimaryGroup();
+                        
+                        // Если группа отправителя ниже группы цели
+                        if (senderGroup != null && targetGroup != null) {
+                            int senderWeight = getGroupWeight(luckPerms, senderGroup);
+                            int targetWeight = getGroupWeight(luckPerms, targetGroup);
+                            
+                            if (senderWeight < targetWeight) {
+                                sender.sendMessage("§cВы не можете узнать информацию об этом игроке!");
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // Если ошибка с LuckPerms - пропускаем проверку
+            }
+        }
+
+        String response = punishmentManager.getSeenInfo(playerName, isOnline);
+        sender.sendMessage(response);
+        commandLogger.logCommand(sender.getName(), "seen " + playerName);
+        return true;
+    }
+
+    private int getGroupWeight(LuckPerms luckPerms, String groupName) {
+        try {
+            Group group = luckPerms.getGroupManager().getGroup(groupName);
+            if (group != null) {
+                return group.getCachedData().getMetaData().getMetaValue("weight", 0);
+            }
+        } catch (Exception e) {}
+        return 0;
+    }
+
+    // =========================================================
     // ==== PEX =====
     // =========================================================
     private boolean handlePex(CommandSender sender, String[] args) {
@@ -465,7 +478,25 @@ public class PlayerCommands implements CommandExecutor {
             return true;
         }
 
-        if (args.length < 2 || !args[0].equalsIgnoreCase("user")) {
+        if (args.length < 1) {
+            sender.sendMessage("§cИспользование: /pex user <ник> | /pex group");
+            return true;
+        }
+
+        String subCmd = args[0].toLowerCase();
+
+        if (subCmd.equals("user") && args.length >= 2) {
+            return handlePexUser(sender, args);
+        } else if (subCmd.equals("group")) {
+            return handlePexGroup(sender);
+        } else {
+            sender.sendMessage("§cИспользование: /pex user <ник> | /pex group");
+            return true;
+        }
+    }
+
+    private boolean handlePexUser(CommandSender sender, String[] args) {
+        if (args.length < 2) {
             sender.sendMessage("§cИспользование: /pex user <ник>");
             return true;
         }
@@ -475,13 +506,11 @@ public class PlayerCommands implements CommandExecutor {
         boolean isOnline = target != null && target.isOnline();
 
         String group = "default";
-        boolean isOp = false;
-        boolean isWhitelisted = false;
         String uuid = "—";
 
         try {
             if (isOnline) {
-                isOp = target.isOp();
+                isOnline = target.isOp();
                 uuid = target.getUniqueId().toString();
                 try {
                     net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
@@ -495,20 +524,19 @@ public class PlayerCommands implements CommandExecutor {
             } else {
                 group = "офлайн";
                 uuid = "—";
-                File opsFile = new File("ops.json");
-                if (opsFile.exists()) {
-                    try {
-                        String content = new String(java.nio.file.Files.readAllBytes(opsFile.toPath()));
-                        isOp = content.contains("\"name\":\"" + playerName + "\"");
-                    } catch (Exception e) {}
-                }
-            }
-
-            File whitelistFile = new File("whitelist.json");
-            if (whitelistFile.exists()) {
+                // Пробуем через LuckPerms
                 try {
-                    String content = new String(java.nio.file.Files.readAllBytes(whitelistFile.toPath()));
-                    isWhitelisted = content.contains("\"name\":\"" + playerName + "\"");
+                    LuckPerms luckPerms = Bukkit.getServicesManager().getRegistration(LuckPerms.class).getProvider();
+                    if (luckPerms != null) {
+                        User user = luckPerms.getUserManager().loadUser(playerName).join();
+                        if (user != null) {
+                            uuid = user.getUniqueId().toString();
+                            String primaryGroup = user.getPrimaryGroup();
+                            if (primaryGroup != null) {
+                                group = primaryGroup;
+                            }
+                        }
+                    }
                 } catch (Exception e) {}
             }
 
@@ -519,12 +547,47 @@ public class PlayerCommands implements CommandExecutor {
 
         String response = "§6📋 Сканируем по нику §f" + playerName + "\n" +
                 "\n" +
-                "§6📌 Группа: §f" + group + "\n" +
-                "§6🔑 OP: §f" + (isOp ? "§aДа" : "§cНет") + "\n" +
-                "§6📋 Белый список: §f" + (isWhitelisted ? "§aДа" : "§cНет") + "\n" +
-                "§6🆔 UUID: §f" + uuid;
+                "§6🆔 UUID: §f" + uuid + "\n" +
+                "§6📌 Группа: §f" + group;
 
         sender.sendMessage(response);
+        return true;
+    }
+
+    private boolean handlePexGroup(CommandSender sender) {
+        try {
+            LuckPerms luckPerms = Bukkit.getServicesManager().getRegistration(LuckPerms.class).getProvider();
+            if (luckPerms == null) {
+                sender.sendMessage("§cLuckPerms не найден!");
+                return true;
+            }
+
+            List<Group> groups = new ArrayList<>(luckPerms.getGroupManager().getLoadedGroups());
+            
+            // Сортируем по приоритету (весу)
+            groups.sort((a, b) -> {
+                int weightA = a.getCachedData().getMetaData().getMetaValue("weight", 0);
+                int weightB = b.getCachedData().getMetaData().getMetaValue("weight", 0);
+                return Integer.compare(weightB, weightA);
+            });
+
+            StringBuilder response = new StringBuilder();
+            response.append("§6Доступные группы:\n");
+            response.append("§7━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            
+            for (Group group : groups) {
+                int count = luckPerms.getUserManager().getUsersInGroup(group.getName()).size();
+                response.append("§f - ").append(group.getName()).append(" §7(").append(count).append(" игроков)\n");
+            }
+            
+            response.append("§7━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            response.append("§7Всего групп: §f").append(groups.size());
+
+            sender.sendMessage(response.toString());
+            
+        } catch (Exception e) {
+            sender.sendMessage("§cОшибка получения групп: " + e.getMessage());
+        }
         return true;
     }
 }
