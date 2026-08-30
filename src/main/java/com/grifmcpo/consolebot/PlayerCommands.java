@@ -424,7 +424,13 @@ public class PlayerCommands implements CommandExecutor {
                 Permission permission = Bukkit.getServicesManager().getRegistration(Permission.class).getProvider();
                 if (permission != null) {
                     String senderGroup = permission.getPrimaryGroup(senderPlayer);
-                    String targetGroup = permission.getPrimaryGroup(playerName);
+                    String targetGroup = null;
+                    
+                    if (isOnline) {
+                        targetGroup = permission.getPrimaryGroup(target);
+                    } else {
+                        targetGroup = "default";
+                    }
                     
                     if (senderGroup != null && targetGroup != null) {
                         int senderWeight = getGroupWeight(senderGroup);
