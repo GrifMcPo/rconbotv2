@@ -38,22 +38,18 @@ commands:
     description: View player command logs
     permission: telegramconsolebot.logs
     usage: /logs <player> [amount]
-  hist:
-    description: View player punishment history
-    permission: telegramconsolebot.hist
-    usage: /hist <player> [amount]
-  shist:
-    description: View punishments issued by a player
-    permission: telegramconsolebot.shists
-    usage: /shist <player> [amount]
   dupeip:
     description: Find players with same IP
     permission: telegramconsolebot.dupeip
     usage: /dupeip <player>
+  seen:
+    description: Check if player is online
+    permission: telegramconsolebot.seen
+    usage: /seen <player>
   pex:
-    description: Check player info
+    description: Check player info or group list
     permission: telegramconsolebot.pex
-    usage: /pex user <player>
+    usage: /pex user <player> | /pex group
 
 permissions:
   telegramconsolebot.admin:
@@ -66,9 +62,8 @@ permissions:
       telegramconsolebot.warn: true
       telegramconsolebot.bc: true
       telegramconsolebot.logs: true
-      telegramconsolebot.hist: true
-      telegramconsolebot.shists: true
       telegramconsolebot.dupeip: true
+      telegramconsolebot.seen: true
       telegramconsolebot.pex: true
   
   telegramconsolebot.ban:
@@ -89,15 +84,12 @@ permissions:
   telegramconsolebot.logs:
     description: View logs
     default: op
-  telegramconsolebot.hist:
-    description: View history
-    default: op
-  telegramconsolebot.shists:
-    description: View issued punishments
-    default: op
   telegramconsolebot.dupeip:
     description: Dupe IP check
     default: op
+  telegramconsolebot.seen:
+    description: Seen command
+    default: op
   telegramconsolebot.pex:
-    description: PEX check permission
+    description: PEX command
     default: op
