@@ -1,13 +1,5 @@
 package com.grifmcpo.consolebot;
 
-import net.luckperms.api.LuckPerms;
-import net.luckperms.api.model.group.Group;
-import net.luckperms.api.model.user.User;
-import net.luckperms.api.node.NodeType;
-import net.luckperms.api.node.types.InheritanceNode;
-import net.luckperms.api.node.types.MetaNode;
-import net.luckperms.api.node.types.PrefixNode;
-import net.luckperms.api.node.types.SuffixNode;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -19,6 +11,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -148,26 +141,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             return;
         }
 
-        if (messageText.equalsIgnoreCase("/блокировка") || messageText.equalsIgnoreCase("!блокировка")) {
-            sendMessage(chatId, "[БОТ] Команда /блокировка больше не поддерживается. Используйте !rcon global ban");
-            return;
-        }
-
-        if (messageText.equalsIgnoreCase("/кик") || messageText.equalsIgnoreCase("!кик")) {
-            sendMessage(chatId, "[БОТ] Команда /кик больше не поддерживается. Используйте !rcon global kick");
-            return;
-        }
-
-        if (messageText.equalsIgnoreCase("/отвязать") || messageText.equalsIgnoreCase("!отвязать")) {
-            sendMessage(chatId, "[БОТ] Привязка аккаунтов отключена. Используйте !rcon global команды.");
-            return;
-        }
-
-        if (messageText.startsWith("/привязать") || messageText.startsWith("!привязать")) {
-            sendMessage(chatId, "[БОТ] Привязка аккаунтов отключена. Используйте !rcon global команды.");
-            return;
-        }
-
         if (!messageText.startsWith("!rcon global ")) {
             if (messageText.startsWith("!")) {
                 sendMessage(chatId, "[БОТ] Неизвестная команда. Введите /помощь для списка команд.");
@@ -237,7 +210,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String ip = parts[3];
 
         deleteMessage(String.valueOf(chatId), messageId);
-        sendMessage(chatId, "[БОТ] Авторизация через бот отключена. Используйте !rcon global команды.");
+        sendMessage(chatId, "[БОТ] Авторизация через бот отключена.");
 
         Player player = Bukkit.getPlayer(playerName);
         if (player != null && player.isOnline()) {
@@ -265,16 +238,14 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleUnlinkReason(long chatId, long userId, String reason) {
         String playerName = pendingUnlinkRequests.remove(userId);
         if (playerName == null) return;
-
-        sendMessage(chatId, "[БОТ] Привязка аккаунтов отключена. Обратитесь к администратору вручную.");
+        sendMessage(chatId, "[БОТ] Привязка аккаунтов отключена.");
     }
 
     private void sendStartMessage(long chatId) {
         String msg = "[БОТ] Приветствую! Это официальный бот GrifMc!\n\n" +
                 "Команды:\n" +
                 "/помощь - список всех команд\n" +
-                "!rcon global <команда> - выполнение RCON команд\n\n" +
-                "Привязка аккаунтов ОТКЛЮЧЕНА. Все команды выполняются через !rcon global";
+                "!rcon global <команда> - выполнение RCON команд";
         sendMessage(chatId, msg);
     }
 
@@ -283,8 +254,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 "/помощь2 - помощь по RCON командам\n" +
                 "/id - показать ваш Telegram ID\n\n" +
                 "Для выполнения команд используйте:\n" +
-                "!rcon global <команда>\n\n" +
-                "Привязка аккаунтов ОТКЛЮЧЕНА!";
+                "!rcon global <команда>";
         sendMessage(chatId, msg);
     }
 
@@ -309,11 +279,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 "!rcon global shist <ник> [кол-во] - наказания выданные игроком\n" +
                 "!rcon global dupeip <ник> - поиск по IP\n" +
                 "!rcon global seen <ник> - узнать онлайн/офлайн игрока\n" +
-                "!rcon global lpinfo <ник> - информация о игроке из LuckPerms\n" +
+                "!rcon global lpinfo <ник> - информация о игроке\n" +
                 "!rcon global pex user <ник> - информация о игроке\n" +
                 "!rcon global pex group - список групп\n" +
                 "!rcon global bc <текст> - объявление в чат\n\n" +
-                "Флаг -s делает наказание скрытым (без оповещений в чат и бота)";
+                "Флаг -s делает наказание скрытым (без оповещений)";
         sendMessage(chatId, msg);
     }
 
@@ -408,23 +378,12 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     }
 
     // =========================================================
-    // ==== НАКАЗАНИЯ (BAN, BANUUID, MUTE, KICK, WARN, UNWARN, UNBAN, UNMUTE) =====
+    // ==== НАКАЗАНИЯ =====
     // =========================================================
     private void handlePunishment(long chatId, String cmd, long userId, String action) {
         String[] parts = cmd.split(" ");
         if (parts.length < 2) {
-            String usage = switch (action) {
-                case "ban" -> "!rcon global ban <ник> [время] <причина> [-s]";
-                case "banuuid" -> "!rcon global banuuid <uuid> [время] <причина> [-s]";
-                case "mute" -> "!rcon global mute <ник> [время] <причина> [-s]";
-                case "kick" -> "!rcon global kick <ник> <причина> [-s]";
-                case "warn" -> "!rcon global warn <ник> <причина> [-s]";
-                case "unwarn" -> "!rcon global unwarn <ник> <причина>";
-                case "unban" -> "!rcon global unban <ник> <причина>";
-                case "unmute" -> "!rcon global unmute <ник> <причина>";
-                default -> "!rcon global " + action + " ...";
-            };
-            sendMessage(chatId, "[БОТ] Использование: " + usage);
+            sendMessage(chatId, "[БОТ] Использование: !rcon global " + action + " ...");
             return;
         }
 
@@ -470,11 +429,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, broadcast);
                 if (success) {
                     String timeStr = duration.equals("навсегда") ? "" : " на " + punishmentManager.formatDuration(duration) + " ";
-                    if (hidden) {
-                        result = "[БОТ] Ответ от сервера:\n[СКРЫТНО] Игрок " + issuer + " забанил " + playerName + timeStr + "по причине: " + reason + " (глобальный)";
-                    } else {
-                        result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " забанил " + playerName + timeStr + "по причине: " + reason + " (глобальный)";
-                    }
+                    result = "[БОТ] Ответ от сервера:\n" + (hidden ? "[СКРЫТНО] " : "") + "Игрок " + issuer + " забанил " + playerName + timeStr + "по причине: " + reason + " (глобальный)";
                 } else {
                     result = "[БОТ] Ответ от сервера:\n" + playerName + " уже забанен!";
                 }
@@ -484,11 +439,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 success = punishmentManager.banUuid(playerName, issuer, reason, duration, hidden, broadcast);
                 if (success) {
                     String timeStr = duration.equals("навсегда") ? "" : " на " + punishmentManager.formatDuration(duration) + " ";
-                    if (hidden) {
-                        result = "[БОТ] Ответ от сервера:\n[СКРЫТНО] Игрок " + issuer + " забанил " + playerName + " (по UUID)" + timeStr + "по причине: " + reason + " (глобальный)";
-                    } else {
-                        result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " забанил " + playerName + " (по UUID)" + timeStr + "по причине: " + reason + " (глобальный)";
-                    }
+                    result = "[БОТ] Ответ от сервера:\n" + (hidden ? "[СКРЫТНО] " : "") + "Игрок " + issuer + " забанил " + playerName + " (по UUID)" + timeStr + "по причине: " + reason + " (глобальный)";
                 } else {
                     result = "[БОТ] Ответ от сервера:\n" + playerName + " уже забанен или не найден!";
                 }
@@ -498,11 +449,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, broadcast);
                 if (success) {
                     String timeStr = duration.equals("навсегда") ? "" : " на " + punishmentManager.formatDuration(duration) + " ";
-                    if (hidden) {
-                        result = "[БОТ] Ответ от сервера:\n[СКРЫТНО] Игрок " + issuer + " замутил " + playerName + timeStr + "по причине: " + reason + " (глобальный)";
-                    } else {
-                        result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " замутил " + playerName + timeStr + "по причине: " + reason + " (глобальный)";
-                    }
+                    result = "[БОТ] Ответ от сервера:\n" + (hidden ? "[СКРЫТНО] " : "") + "Игрок " + issuer + " замутил " + playerName + timeStr + "по причине: " + reason + " (глобальный)";
                 } else {
                     result = "[БОТ] Ответ от сервера:\n" + playerName + " уже замучен!";
                 }
@@ -511,11 +458,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             case "kick":
                 success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden, broadcast);
                 if (success) {
-                    if (hidden) {
-                        result = "[БОТ] Ответ от сервера:\n[СКРЫТНО] Игрок " + issuer + " кикнул " + playerName + " по причине: " + reason + " (глобальный)";
-                    } else {
-                        result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " кикнул " + playerName + " по причине: " + reason + " (глобальный)";
-                    }
+                    result = "[БОТ] Ответ от сервера:\n" + (hidden ? "[СКРЫТНО] " : "") + "Игрок " + issuer + " кикнул " + playerName + " по причине: " + reason + " (глобальный)";
                 } else {
                     result = "[БОТ] Ответ от сервера:\n" + playerName + " не найден!";
                 }
@@ -524,11 +467,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             case "warn":
                 success = punishmentManager.warnPlayer(playerName, issuer, reason, hidden, broadcast);
                 if (success) {
-                    if (hidden) {
-                        result = "[БОТ] Ответ от сервера:\n[СКРЫТНО] Игрок " + issuer + " выдал предупреждение " + playerName + " по причине: " + reason + " (глобальный)";
-                    } else {
-                        result = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " выдал предупреждение " + playerName + " по причине: " + reason + " (глобальный)";
-                    }
+                    result = "[БОТ] Ответ от сервера:\n" + (hidden ? "[СКРЫТНО] " : "") + "Игрок " + issuer + " выдал предупреждение " + playerName + " по причине: " + reason + " (глобальный)";
                 } else {
                     result = "[БОТ] Ответ от сервера:\nНе удалось выдать предупреждение!";
                 }
@@ -605,12 +544,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         boolean success = punishmentManager.banIp(playerName, issuer, reason, duration, hidden);
         if (success) {
             String timeStr = duration.equals("навсегда") ? "" : " на " + punishmentManager.formatDuration(duration) + " ";
-            String msg;
-            if (hidden) {
-                msg = "[БОТ] Ответ от сервера:\n[СКРЫТНО] Игрок " + issuer + " забанил IP " + playerName + timeStr + "по причине: " + reason + " (глобальный)";
-            } else {
-                msg = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " забанил IP " + playerName + timeStr + "по причине: " + reason + " (глобальный)";
-            }
+            String msg = "[БОТ] Ответ от сервера:\n" + (hidden ? "[СКРЫТНО] " : "") + "Игрок " + issuer + " забанил IP " + playerName + timeStr + "по причине: " + reason + " (глобальный)";
             sendMessage(chatId, msg);
         } else {
             sendMessage(chatId, "[БОТ] Ответ от сервера:\nНе удалось забанить IP " + playerName);
@@ -634,8 +568,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         boolean success = punishmentManager.unbanIp(playerName, issuer, reason);
         if (success) {
-            String msg = "[БОТ] Ответ от сервера:\nИгрок " + issuer + " разбанил IP " + playerName + " по причине: " + reason + " (глобальный)";
-            sendMessage(chatId, msg);
+            sendMessage(chatId, "[БОТ] Ответ от сервера:\nИгрок " + issuer + " разбанил IP " + playerName + " по причине: " + reason + " (глобальный)");
         } else {
             sendMessage(chatId, "[БОТ] Ответ от сервера:\nIP игрока " + playerName + " не забанен!");
         }
@@ -736,8 +669,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             sendMessage(chatId, "[БОТ] Ответ от сервера:\nСписок банов пуст.");
         } else {
             StringBuilder response = new StringBuilder();
-            response.append("[БОТ] Ответ от сервера:\n");
-            response.append("Список банов (Страница ").append(page).append("/").append(totalPages).append(")\n");
+            response.append("[БОТ] Ответ от сервера:\nСписок банов (Страница ").append(page).append("/").append(totalPages).append(")\n");
             response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
             for (String ban : bans) {
                 response.append(ban).append("\n");
@@ -768,8 +700,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             sendMessage(chatId, "[БОТ] Ответ от сервера:\nСписок мутов пуст.");
         } else {
             StringBuilder response = new StringBuilder();
-            response.append("[БОТ] Ответ от сервера:\n");
-            response.append("Список мутов (Страница ").append(page).append("/").append(totalPages).append(")\n");
+            response.append("[БОТ] Ответ от сервера:\nСписок мутов (Страница ").append(page).append("/").append(totalPages).append(")\n");
             response.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
             for (String mute : mutes) {
                 response.append(mute).append("\n");
@@ -870,9 +801,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         playersWithSameIp.remove(playerName);
 
         StringBuilder response = new StringBuilder();
-        response.append("[БОТ] Ответ от сервера:\n");
-        response.append("Сканируем по нику: ").append(playerName).append("\n");
-
+        response.append("[БОТ] Ответ от сервера:\nСканируем по нику: ").append(playerName).append("\n");
         if (playersWithSameIp.isEmpty()) {
             response.append("Нет других аккаунтов с этим IP");
         } else {
@@ -899,113 +828,25 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String response = "[БОТ] Ответ от сервера:\n";
         
         if (isOnline) {
-            response += "Игрок " + playerName + " онлайн в течение " + getOnlineTime(player) + "\n";
+            long onlineTime = System.currentTimeMillis() - player.getFirstPlayed();
+            response += "Игрок " + playerName + " онлайн в течение " + formatTime(onlineTime) + "\n";
             response += " - UUID: " + player.getUniqueId().toString();
         } else {
             String offlineTime = getOfflineTime(playerName);
             UUID uuid = getPlayerUuid(playerName);
             boolean isWhitelisted = isPlayerWhitelisted(playerName);
-            String location = getPlayerLastLocation(playerName);
             
             response += "Игрок " + playerName + " офлайн в течение " + offlineTime + "\n";
             response += " - UUID: " + (uuid != null ? uuid.toString() : "—") + "\n";
             response += " - В белом списке: " + (isWhitelisted ? "правда" : "ложь") + "\n";
-            response += " - Местоположение: " + location;
+            response += " - Местоположение: неизвестно";
         }
 
         sendMessage(chatId, response);
     }
 
-    private String getOnlineTime(Player player) {
-        long joinTime = player.getFirstPlayed();
-        long now = System.currentTimeMillis();
-        long diff = now - joinTime;
-        return formatTime(diff);
-    }
-
-    private String getOfflineTime(String playerName) {
-        // Получаем время последнего выхода из логов или usercache
-        try {
-            File logFile = new File("logs/latest.log");
-            if (logFile.exists()) {
-                String content = new String(java.nio.file.Files.readAllBytes(logFile.toPath()));
-                String[] lines = content.split("\n");
-                for (int i = lines.length - 1; i >= 0; i--) {
-                    if (lines[i].contains(playerName) && lines[i].contains("left")) {
-                        // Парсим время
-                        String timeStr = lines[i].substring(0, 19);
-                        try {
-                            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                            Date date = sdf.parse(timeStr);
-                            long diff = System.currentTimeMillis() - date.getTime();
-                            return formatTime(diff);
-                        } catch (Exception e) {}
-                    }
-                }
-            }
-        } catch (Exception e) {}
-        return "неизвестно";
-    }
-
-    private UUID getPlayerUuid(String playerName) {
-        Player player = Bukkit.getPlayer(playerName);
-        if (player != null) return player.getUniqueId();
-        
-        try {
-            File usercache = new File("usercache.json");
-            if (usercache.exists()) {
-                String content = new String(java.nio.file.Files.readAllBytes(usercache.toPath()));
-                int idx = content.indexOf("\"name\":\"" + playerName + "\"");
-                if (idx != -1) {
-                    int uuidIdx = content.lastIndexOf("\"uuid\":\"", idx);
-                    if (uuidIdx != -1) {
-                        String uuidStr = content.substring(uuidIdx + 9, content.indexOf("\"", uuidIdx + 10));
-                        return UUID.fromString(uuidStr);
-                    }
-                }
-            }
-        } catch (Exception e) {}
-        return null;
-    }
-
-    private boolean isPlayerWhitelisted(String playerName) {
-        try {
-            File whitelist = new File("whitelist.json");
-            if (whitelist.exists()) {
-                String content = new String(java.nio.file.Files.readAllBytes(whitelist.toPath()));
-                return content.contains("\"name\":\"" + playerName + "\"");
-            }
-        } catch (Exception e) {}
-        return false;
-    }
-
-    private String getPlayerLastLocation(String playerName) {
-        // Можно расширить для получения последней локации
-        return "неизвестно";
-    }
-
-    private String formatTime(long millis) {
-        long seconds = millis / 1000;
-        long minutes = seconds / 60;
-        long hours = minutes / 60;
-        long days = hours / 24;
-        
-        seconds %= 60;
-        minutes %= 60;
-        hours %= 24;
-        
-        StringBuilder sb = new StringBuilder();
-        if (days > 0) sb.append(days).append("д ");
-        if (hours > 0) sb.append(hours).append("ч ");
-        if (minutes > 0 && hours == 0) sb.append(minutes).append("м ");
-        if (seconds > 0 && minutes == 0 && hours == 0) sb.append(seconds).append("с");
-        
-        if (sb.length() == 0) return "только что";
-        return sb.toString().trim();
-    }
-
     // =========================================================
-    // ==== LPINFO =====
+    // ==== LPINFO (через Vault) =====
     // =========================================================
     private void handleLpInfo(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
@@ -1015,68 +856,45 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         }
 
         String playerName = parts[1];
-        
+        Player target = Bukkit.getPlayer(playerName);
+        boolean isOnline = target != null && target.isOnline();
+
         try {
-            LuckPerms luckPerms = Bukkit.getServicesManager().getRegistration(LuckPerms.class).getProvider();
-            if (luckPerms == null) {
-                sendMessage(chatId, "[БОТ] LuckPerms не найден!");
-                return;
-            }
-
-            User user = luckPerms.getUserManager().getUser(playerName);
-            if (user == null) {
-                // Пробуем загрузить офлайн
-                user = luckPerms.getUserManager().loadUser(playerName).join();
-            }
-
-            if (user == null) {
-                sendMessage(chatId, "[БОТ] Игрок " + playerName + " не найден в LuckPerms!");
-                return;
+            String group = "default";
+            String uuid = isOnline ? target.getUniqueId().toString() : "—";
+            String status = isOnline ? "Online" : "Offline";
+            String prefix = "";
+            String suffix = "";
+            String primaryGroup = "default";
+            
+            net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
+                    .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
+            
+            if (permission != null && isOnline) {
+                group = permission.getPrimaryGroup(target);
+                prefix = permission.getPlayerPrefix(target) != null ? permission.getPlayerPrefix(target) : "";
+                suffix = permission.getPlayerSuffix(target) != null ? permission.getPlayerSuffix(target) : "";
+                primaryGroup = group != null ? group : "default";
             }
 
             String response = "[БОТ] Ответ от сервера:\n";
             response += "[LP] > User Info: " + playerName + "\n";
-            response += "[LP] - UUID: " + user.getUniqueId() + "\n";
-            response += "[LP]     (type: offline)\n";
-            response += "[LP] - Status: " + (Bukkit.getPlayer(playerName) != null ? "Online" : "Offline") + "\n";
-            
-            // Parent Groups
+            response += "[LP] - UUID: " + uuid + "\n";
+            response += "[LP]     (type: " + (isOnline ? "online" : "offline") + ")\n";
+            response += "[LP] - Status: " + status + "\n";
             response += "[LP] - Parent Groups:\n";
-            for (Group group : user.getInheritedGroups(luckPerms.getGroupManager())) {
-                response += "[LP]     > " + group.getName() + "\n";
-            }
-            
-            response += "[LP] - Contextual Data: " + user.getCachedData().getContextualData().getContexts().toString() + "\n";
+            response += "[LP]     > " + primaryGroup + "\n";
+            response += "[LP] - Contextual Data: \n";
             response += "[LP]     Contexts: None\n";
-            
-            // Prefix
-            String prefix = user.getCachedData().getMetaData().getPrefix();
-            response += "[LP]     Prefix: \"" + (prefix != null ? prefix : "") + "\"\n";
-            
-            // Suffix
-            String suffix = user.getCachedData().getMetaData().getSuffix();
-            response += "[LP]     Suffix: \"" + (suffix != null ? suffix : "") + "\"\n";
-            
-            // Primary Group
-            String primaryGroup = user.getPrimaryGroup();
-            response += "[LP]     Primary Group: " + (primaryGroup != null ? primaryGroup : "—") + "\n";
-            
-            // Meta
-            response += "[LP]     Meta: ";
-            Map<String, String> meta = user.getCachedData().getMetaData().getMeta();
-            if (!meta.isEmpty()) {
-                response += meta.entrySet().stream()
-                    .map(e -> e.getKey() + "=" + e.getValue())
-                    .collect(Collectors.joining(" "));
-            } else {
-                response += "—";
-            }
+            response += "[LP]     Prefix: \"" + prefix + "\"\n";
+            response += "[LP]     Suffix: \"" + suffix + "\"\n";
+            response += "[LP]     Primary Group: " + primaryGroup + "\n";
+            response += "[LP]     Meta: (default=true) (primarygroup=" + primaryGroup + ")";
 
             sendMessage(chatId, response);
             
         } catch (Exception e) {
-            sendMessage(chatId, "[БОТ] Ошибка получения информации: " + e.getMessage());
-            plugin.getLogger().warning("LPInfo error: " + e.getMessage());
+            sendMessage(chatId, "[БОТ] Ошибка: " + e.getMessage());
         }
     }
 
@@ -1118,34 +936,15 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         try {
             if (isOnline) {
                 uuid = target.getUniqueId().toString();
-                try {
-                    net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
-                            .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
-                    if (permission != null) {
-                        group = permission.getPrimaryGroup(target);
-                    }
-                } catch (Exception e) {
-                    group = "неизвестно";
+                net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
+                        .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
+                if (permission != null) {
+                    group = permission.getPrimaryGroup(target);
                 }
             } else {
                 group = "офлайн";
                 uuid = "—";
-                // Пробуем через LuckPerms
-                try {
-                    LuckPerms luckPerms = Bukkit.getServicesManager().getRegistration(LuckPerms.class).getProvider();
-                    if (luckPerms != null) {
-                        User user = luckPerms.getUserManager().loadUser(playerName).join();
-                        if (user != null) {
-                            uuid = user.getUniqueId().toString();
-                            String primaryGroup = user.getPrimaryGroup();
-                            if (primaryGroup != null) {
-                                group = primaryGroup;
-                            }
-                        }
-                    }
-                } catch (Exception e) {}
             }
-
         } catch (Exception e) {
             sendMessage(chatId, "[БОТ] Ошибка: " + e.getMessage());
             return;
@@ -1161,39 +960,40 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
     private void handlePexGroup(long chatId) {
         try {
-            LuckPerms luckPerms = Bukkit.getServicesManager().getRegistration(LuckPerms.class).getProvider();
-            if (luckPerms == null) {
-                sendMessage(chatId, "[БОТ] LuckPerms не найден!");
+            net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
+                    .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
+            
+            if (permission == null) {
+                sendMessage(chatId, "[БОТ] Vault не найден!");
                 return;
             }
 
-            // Получаем все группы и сортируем по весу
-            List<Group> groups = new ArrayList<>(luckPerms.getGroupManager().getLoadedGroups());
-            
-            // Сортируем по приоритету (весу)
-            groups.sort((a, b) -> {
-                int weightA = a.getCachedData().getMetaData().getMetaValue("weight", 0);
-                int weightB = b.getCachedData().getMetaData().getMetaValue("weight", 0);
-                return Integer.compare(weightB, weightA);
-            });
+            Map<String, Integer> groupCounts = new HashMap<>();
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                String group = permission.getPrimaryGroup(player);
+                if (group != null) {
+                    groupCounts.put(group, groupCounts.getOrDefault(group, 0) + 1);
+                }
+            }
+
+            List<String> sortedGroups = Arrays.asList("owner", "admin", "mod", "helper", "builder", "default");
 
             String response = "[БОТ] Ответ от сервера:\n";
             response += "Доступные группы:\n";
             response += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
             
-            for (Group group : groups) {
-                int count = luckPerms.getUserManager().getUsersInGroup(group.getName()).size();
-                response += " - " + group.getName() + " (" + count + " игроков)\n";
+            for (String group : sortedGroups) {
+                int count = groupCounts.getOrDefault(group, 0);
+                response += " - " + group + " (" + count + " игроков)\n";
             }
             
             response += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-            response += "Всего групп: " + groups.size();
+            response += "Всего групп: " + sortedGroups.size();
 
             sendMessage(chatId, response);
             
         } catch (Exception e) {
-            sendMessage(chatId, "[БОТ] Ошибка получения групп: " + e.getMessage());
-            plugin.getLogger().warning("Pex group error: " + e.getMessage());
+            sendMessage(chatId, "[БОТ] Ошибка: " + e.getMessage());
         }
     }
 
@@ -1211,9 +1011,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String sender = plugin.getCustomSender(userId);
         if (sender == null) sender = "RCON@" + userId;
 
-        String chatMessage = "§e[Объявление] §f" + message + " §7(пишет: " + sender + "§7)";
-        Bukkit.broadcastMessage(chatMessage);
-
+        Bukkit.broadcastMessage("§e[Объявление] §f" + message + " §7(пишет: " + sender + "§7)");
         sendMessage(chatId, "[БОТ] Ответ от сервера:\n[Объявление] " + message + " (пишет: " + sender + ")");
     }
 
@@ -1228,7 +1026,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String reason = parts.length > 4 ? parts[4] : "Без причины";
         String issuer = plugin.getCustomSender(chatId);
         if (issuer == null) issuer = "RCON";
-
         boolean hidden = data.contains("_hidden_");
 
         boolean success = false;
@@ -1238,9 +1035,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             case "ban":
                 success = punishmentManager.banPlayer(playerName, issuer, reason, duration, hidden, !hidden);
                 if (success) {
-                    String timeStr = duration.equals("навсегда") ? "" : " на " + duration;
-                    result = "[БОТ] Ответ от сервера:\n" + issuer + " забанил " + playerName + timeStr + "по причине: " + reason;
-                    if (hidden) result += " (СКРЫТО)";
+                    result = "[БОТ] Ответ от сервера:\n" + issuer + " забанил " + playerName + (duration.equals("навсегда") ? "" : " на " + duration) + " по причине: " + reason + (hidden ? " (СКРЫТО)" : "");
                 } else {
                     result = "[БОТ] Ответ от сервера:\n" + playerName + " уже забанен!";
                 }
@@ -1249,9 +1044,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             case "mute":
                 success = punishmentManager.mutePlayer(playerName, issuer, reason, duration, hidden, !hidden);
                 if (success) {
-                    String timeStr = duration.equals("навсегда") ? "" : " на " + duration;
-                    result = "[БОТ] Ответ от сервера:\n" + issuer + " замутил " + playerName + timeStr + "по причине: " + reason;
-                    if (hidden) result += " (СКРЫТО)";
+                    result = "[БОТ] Ответ от сервера:\n" + issuer + " замутил " + playerName + (duration.equals("навсегда") ? "" : " на " + duration) + " по причине: " + reason + (hidden ? " (СКРЫТО)" : "");
                 } else {
                     result = "[БОТ] Ответ от сервера:\n" + playerName + " уже замучен!";
                 }
@@ -1260,8 +1053,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             case "kick":
                 success = punishmentManager.kickPlayer(playerName, issuer, reason, hidden, !hidden);
                 if (success) {
-                    result = "[БОТ] Ответ от сервера:\n" + issuer + " кикнул " + playerName + " по причине: " + reason;
-                    if (hidden) result += " (СКРЫТО)";
+                    result = "[БОТ] Ответ от сервера:\n" + issuer + " кикнул " + playerName + " по причине: " + reason + (hidden ? " (СКРЫТО)" : "");
                 } else {
                     result = "[БОТ] Ответ от сервера:\n" + playerName + " не найден!";
                 }
@@ -1387,7 +1179,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         final long finalChatId = chatId;
         final String finalCommand = command;
-        final String finalIssuer = issuer;
 
         final int[] tempMsgId = {0};
         try {
@@ -1401,7 +1192,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         final int finalTempMsgId = tempMsgId[0];
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            commandExecutor.executeCommand(finalCommand, finalIssuer);
+            commandExecutor.executeCommand(finalCommand, issuer);
             if (finalTempMsgId != 0) {
                 deleteMessage(String.valueOf(finalChatId), finalTempMsgId);
             }
@@ -1412,6 +1203,80 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     // =========================================================
     // ==== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ =====
     // =========================================================
+
+    private String formatTime(long millis) {
+        long seconds = millis / 1000;
+        long minutes = seconds / 60;
+        long hours = minutes / 60;
+        long days = hours / 24;
+        
+        seconds %= 60;
+        minutes %= 60;
+        hours %= 24;
+        
+        StringBuilder sb = new StringBuilder();
+        if (days > 0) sb.append(days).append("д ");
+        if (hours > 0) sb.append(hours).append("ч ");
+        if (minutes > 0 && hours == 0) sb.append(minutes).append("м ");
+        if (seconds > 0 && minutes == 0 && hours == 0) sb.append(seconds).append("с");
+        
+        if (sb.length() == 0) return "только что";
+        return sb.toString().trim();
+    }
+
+    private String getOfflineTime(String playerName) {
+        try {
+            File logFile = new File("logs/latest.log");
+            if (logFile.exists()) {
+                String content = new String(java.nio.file.Files.readAllBytes(logFile.toPath()));
+                String[] lines = content.split("\n");
+                for (int i = lines.length - 1; i >= 0; i--) {
+                    if (lines[i].contains(playerName) && lines[i].contains("left")) {
+                        String timeStr = lines[i].substring(0, 19);
+                        try {
+                            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                            Date date = sdf.parse(timeStr);
+                            long diff = System.currentTimeMillis() - date.getTime();
+                            return formatTime(diff);
+                        } catch (Exception e) {}
+                    }
+                }
+            }
+        } catch (Exception e) {}
+        return "неизвестно";
+    }
+
+    private UUID getPlayerUuid(String playerName) {
+        Player player = Bukkit.getPlayer(playerName);
+        if (player != null) return player.getUniqueId();
+        
+        try {
+            File usercache = new File("usercache.json");
+            if (usercache.exists()) {
+                String content = new String(java.nio.file.Files.readAllBytes(usercache.toPath()));
+                int idx = content.indexOf("\"name\":\"" + playerName + "\"");
+                if (idx != -1) {
+                    int uuidIdx = content.lastIndexOf("\"uuid\":\"", idx);
+                    if (uuidIdx != -1) {
+                        String uuidStr = content.substring(uuidIdx + 9, content.indexOf("\"", uuidIdx + 10));
+                        return UUID.fromString(uuidStr);
+                    }
+                }
+            }
+        } catch (Exception e) {}
+        return null;
+    }
+
+    private boolean isPlayerWhitelisted(String playerName) {
+        try {
+            File whitelist = new File("whitelist.json");
+            if (whitelist.exists()) {
+                String content = new String(java.nio.file.Files.readAllBytes(whitelist.toPath()));
+                return content.contains("\"name\":\"" + playerName + "\"");
+            }
+        } catch (Exception e) {}
+        return false;
+    }
 
     public void sendMessage(long chatId, String text) {
         SendMessage message = new SendMessage();
