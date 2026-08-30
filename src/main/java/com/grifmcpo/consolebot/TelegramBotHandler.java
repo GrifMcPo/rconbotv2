@@ -111,6 +111,15 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         saveKnownUser(userId);
         plugin.getLogger().info("Получено: " + messageText + " от " + userId);
 
+        // ===== ПРОВЕРКА ТЕХНИЧЕСКИХ РАБОТ =====
+        if (plugin.getTechWorksManager().isTechMode()) {
+            if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+                String reason = plugin.getTechWorksManager().getKickReason();
+                sendMessage(chatId, "[БОТ] 🔧 Технические работы на сервере!\nПричина: " + reason);
+                return;
+            }
+        }
+
         if (botBanManager.isBanned(userId)) {
             sendMessage(chatId, botBanManager.getBanMessage(userId));
             return;
@@ -211,7 +220,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         deleteMessage(String.valueOf(chatId), messageId);
         sendMessage(chatId, "[БОТ] Авторизация через бот отключена.");
-
         Player player = Bukkit.getPlayer(playerName);
         if (player != null && player.isOnline()) {
             player.setWalkSpeed(0.2f);
@@ -228,7 +236,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         deleteMessage(String.valueOf(chatId), messageId);
         sendMessage(chatId, "[БОТ] Авторизация через бот отключена.");
-
         Player player = Bukkit.getPlayer(playerName);
         if (player != null && player.isOnline()) {
             player.kickPlayer("Авторизация через бот отключена");
@@ -268,21 +275,28 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 "!rcon global unwarn <ник> <причина> - снять предупреждение\n" +
                 "!rcon global unban <ник> <причина> - разбанить игрока\n" +
                 "!rcon global unmute <ник> <причина> - размутить игрока\n" +
-                "!rcon global banip <ник> [время] <причина> [-s] - забанить IP игрока\n" +
+                "!rcon global banip <ник> [время] <причина> [-s] - забанить IP\n" +
                 "!rcon global unbanip <ник> <причина> - разбанить IP\n" +
                 "!rcon global checkban <ник> - проверить бан\n" +
                 "!rcon global checkmute <ник> - проверить мут\n" +
                 "!rcon global banlist - список банов\n" +
                 "!rcon global mutelist - список мутов\n" +
                 "!rcon global logs <ник> [кол-во] - логи команд\n" +
-                "!rcon global hist <ник> [кол-во] - история наказаний игрока\n" +
-                "!rcon global shist <ник> [кол-во] - наказания выданные игроком\n" +
+                "!rcon global hist <ник> [кол-во] - история наказаний\n" +
+                "!rcon global shist <ник> [кол-во] - выданные наказания\n" +
                 "!rcon global dupeip <ник> - поиск по IP\n" +
-                "!rcon global seen <ник> - узнать онлайн/офлайн игрока\n" +
+                "!rcon global seen <ник> - узнать онлайн/офлайн\n" +
                 "!rcon global lpinfo <ник> - информация о игроке\n" +
                 "!rcon global pex user <ник> - информация о игроке\n" +
                 "!rcon global pex group - список групп\n" +
-                "!rcon global console <текст> - отправить текст в консоль\n" +
+                "!rcon global console <текст> - отправить в консоль\n" +
+                "!rcon global tex on <причина> [время] - включить тех. работы\n" +
+                "!rcon global tex off - выключить тех. работы\n" +
+                "!rcon global tex auto <время> <причина> - авто-включение\n" +
+                "!rcon global tex status - статус тех. работ\n" +
+                "!rcon global blackserver <ник/uuid> - добавить в ЧС\n" +
+                "!rcon global unblackserver <ник/uuid> - удалить из ЧС\n" +
+                "!rcon global blacklist - список черного списка\n" +
                 "!rcon global bc <текст> - объявление в чат\n\n" +
                 "Флаг -s делает наказание скрытым (без оповещений)";
         sendMessage(chatId, msg);
@@ -370,6 +384,18 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
             case "console":
                 handleConsole(chatId, cmd, userId);
+                break;
+            case "tex":
+                handleTechWorks(chatId, cmd, userId);
+                break;
+            case "blackserver":
+                handleBlackServer(chatId, cmd, userId);
+                break;
+            case "unblackserver":
+                handleUnblackServer(chatId, cmd, userId);
+                break;
+            case "blacklist":
+                handleBlacklist(chatId);
                 break;
             case "bc":
             case "bcast":
@@ -1016,6 +1042,179 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         plugin.getLogger().info("[Console] " + text + " (От: " + sender + ")");
 
         sendMessage(chatId, "[БОТ] Ответ от сервера:\nКоманда отправлена в консоль: " + text);
+    }
+
+    // =========================================================
+    // ==== TEX (Технические работы) =====
+    // =========================================================
+    private void handleTechWorks(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global tex <on/off/auto/status>");
+            return;
+        }
+
+        String action = parts[1].toLowerCase();
+        String issuer = plugin.getCustomSender(userId);
+        if (issuer == null) issuer = "RCON@" + userId;
+
+        switch (action) {
+            case "on": {
+                if (parts.length < 3) {
+                    sendMessage(chatId, "[БОТ] Использование: !rcon global tex on <причина> [время]");
+                    sendMessage(chatId, "[БОТ] Пример: !rcon global tex on &cТехнические работы! 1h");
+                    return;
+                }
+
+                if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+                    sendMessage(chatId, "[БОТ] У вас нет прав!");
+                    return;
+                }
+
+                String reason = parts[2];
+                String duration = null;
+                if (parts.length >= 4) {
+                    duration = parts[3];
+                }
+
+                boolean success = plugin.getTechWorksManager().turnOn(issuer, reason, duration);
+                if (success) {
+                    String msg = "[БОТ] 🔧 ТЕХНИЧЕСКИЕ РАБОТЫ ВКЛЮЧЕНЫ!\n" +
+                            "Причина: " + reason + "\n" +
+                            "Администратор: " + issuer + "\n" +
+                            "Окончание: " + plugin.getTechWorksManager().getEndTimeFormatted() + "\n" +
+                            "Осталось: " + plugin.getTechWorksManager().getTimeLeft();
+                    sendMessage(chatId, msg);
+                } else {
+                    sendMessage(chatId, "[БОТ] Технические работы уже включены!");
+                }
+                break;
+            }
+
+            case "off": {
+                if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+                    sendMessage(chatId, "[БОТ] У вас нет прав!");
+                    return;
+                }
+
+                boolean success = plugin.getTechWorksManager().turnOff();
+                if (success) {
+                    sendMessage(chatId, "[БОТ] 🔧 Технические работы ВЫКЛЮЧЕНЫ!");
+                } else {
+                    sendMessage(chatId, "[БОТ] Технические работы и так выключены!");
+                }
+                break;
+            }
+
+            case "auto": {
+                if (parts.length < 4) {
+                    sendMessage(chatId, "[БОТ] Использование: !rcon global tex auto <время> <причина>");
+                    sendMessage(chatId, "[БОТ] Пример: !rcon global tex auto 1h &cПлановые работы");
+                    return;
+                }
+
+                if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+                    sendMessage(chatId, "[БОТ] У вас нет прав!");
+                    return;
+                }
+
+                String duration = parts[2];
+                String reason = String.join(" ", Arrays.copyOfRange(parts, 3, parts.length));
+
+                boolean success = plugin.getTechWorksManager().setAutoStart(duration, reason);
+                if (success) {
+                    sendMessage(chatId, "[БОТ] ⏰ Авто-включение тех. работ запланировано!\n" +
+                            "Через: " + duration + "\n" +
+                            "Причина: " + reason);
+                } else {
+                    sendMessage(chatId, "[БОТ] Неверный формат времени! Используйте: 1h, 30m, 1d и т.д.");
+                }
+                break;
+            }
+
+            case "status": {
+                if (!plugin.getTechWorksManager().isTechMode()) {
+                    sendMessage(chatId, "[БОТ] Технические работы ВЫКЛЮЧЕНЫ");
+                } else {
+                    String msg = "[БОТ] 🔧 Технические работы ВКЛЮЧЕНЫ!\n" +
+                            "Причина: " + plugin.getTechWorksManager().getKickReason() + "\n" +
+                            "Администратор: " + plugin.getTechWorksManager().adminWhoStarted + "\n" +
+                            "Начало: " + plugin.getTechWorksManager().startTime + "\n" +
+                            "Окончание: " + plugin.getTechWorksManager().getEndTimeFormatted() + "\n" +
+                            "Осталось: " + plugin.getTechWorksManager().getTimeLeft();
+                    sendMessage(chatId, msg);
+                }
+                break;
+            }
+
+            default:
+                sendMessage(chatId, "[БОТ] Неизвестная подкоманда!\n" +
+                        "Использование: !rcon global tex <on/off/auto/status>");
+                break;
+        }
+    }
+
+    // =========================================================
+    // ==== BLACKSERVER =====
+    // =========================================================
+    private void handleBlackServer(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global blackserver <ник/uuid>");
+            return;
+        }
+
+        if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+            sendMessage(chatId, "[БОТ] У вас нет прав!");
+            return;
+        }
+
+        String identifier = parts[1];
+        String issuer = plugin.getCustomSender(userId);
+        if (issuer == null) issuer = "RCON@" + userId;
+
+        String name = null;
+        String uuid = null;
+        
+        try {
+            UUID.fromString(identifier);
+            uuid = identifier;
+        } catch (IllegalArgumentException e) {
+            name = identifier;
+        }
+
+        boolean success = plugin.getTechWorksManager().addBlacklist(name, uuid, issuer);
+        if (success) {
+            sendMessage(chatId, "[БОТ] ✅ Игрок " + (name != null ? name : uuid) + " добавлен в черный список!");
+        } else {
+            sendMessage(chatId, "[БОТ] Игрок уже в черном списке!");
+        }
+    }
+
+    private void handleUnblackServer(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global unblackserver <ник/uuid>");
+            return;
+        }
+
+        if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
+            sendMessage(chatId, "[БОТ] У вас нет прав!");
+            return;
+        }
+
+        String identifier = parts[1];
+        boolean success = plugin.getTechWorksManager().removeBlacklist(identifier);
+        if (success) {
+            sendMessage(chatId, "[БОТ] ✅ Игрок " + identifier + " удален из черного списка!");
+        } else {
+            sendMessage(chatId, "[БОТ] Игрок " + identifier + " не найден в черном списке!");
+        }
+    }
+
+    private void handleBlacklist(long chatId) {
+        String info = plugin.getTechWorksManager().getBlacklistInfo();
+        sendMessage(chatId, info);
     }
 
     // =========================================================
