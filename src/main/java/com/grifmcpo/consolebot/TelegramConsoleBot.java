@@ -25,6 +25,7 @@ public class TelegramConsoleBot extends JavaPlugin {
     private AdminLogger adminLogger;
     private BotBanManager botBanManager;
     private GroupManager groupManager;
+    private TechWorksManager techWorksManager;
     private TelegramBotHandler botHandler;
 
     @Override
@@ -48,9 +49,11 @@ public class TelegramConsoleBot extends JavaPlugin {
         punishmentManager = new PunishmentManager(this, adminLogger);
         botBanManager = new BotBanManager(this);
         groupManager = new GroupManager(this);
+        techWorksManager = new TechWorksManager(this);
 
         Bukkit.getPluginManager().registerEvents(punishmentManager, this);
         Bukkit.getPluginManager().registerEvents(commandLogger, this);
+        Bukkit.getPluginManager().registerEvents(techWorksManager, this);
 
         // ===== РЕГИСТРАЦИЯ КОМАНД ДЛЯ ИГРОКОВ =====
         PlayerCommands playerCommands = new PlayerCommands(this, punishmentManager, playerManager, commandLogger);
@@ -64,9 +67,8 @@ public class TelegramConsoleBot extends JavaPlugin {
             getCommand("unwarn").setExecutor(playerCommands);
             getCommand("bc").setExecutor(playerCommands);
             getCommand("logs").setExecutor(playerCommands);
-            getCommand("hist").setExecutor(playerCommands);
-            getCommand("shist").setExecutor(playerCommands);
             getCommand("dupeip").setExecutor(playerCommands);
+            getCommand("seen").setExecutor(playerCommands);
             getCommand("pex").setExecutor(playerCommands);
             getLogger().info("Все команды для игроков зарегистрированы!");
         } catch (NullPointerException e) {
@@ -155,5 +157,6 @@ public class TelegramConsoleBot extends JavaPlugin {
     public AdminLogger getAdminLogger() { return adminLogger; }
     public BotBanManager getBotBanManager() { return botBanManager; }
     public GroupManager getGroupManager() { return groupManager; }
+    public TechWorksManager getTechWorksManager() { return techWorksManager; }
     public TelegramBotHandler getBotHandler() { return botHandler; }
 }
