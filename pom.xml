@@ -17,16 +17,17 @@
     </properties>
 
     <repositories>
-        <!-- PaperMC репозиторий -->
         <repository>
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
-        
-        <!-- JitPack для Vault -->
         <repository>
             <id>jitpack.io</id>
             <url>https://jitpack.io</url>
+        </repository>
+        <repository>
+            <id>central</id>
+            <url>https://repo1.maven.org/maven2/</url>
         </repository>
     </repositories>
 
@@ -44,6 +45,12 @@
             <groupId>org.telegram</groupId>
             <artifactId>telegrambots</artifactId>
             <version>6.9.7.1</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.httpcomponents</groupId>
+                    <artifactId>httpclient</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Vault API -->
@@ -53,16 +60,31 @@
             <version>1.7</version>
             <scope>provided</scope>
         </dependency>
+
+        <!-- LuckPerms API (provided - уже есть на сервере) -->
+        <dependency>
+            <groupId>net.luckperms</groupId>
+            <artifactId>luckperms-api</artifactId>
+            <version>5.4</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <finalName>${project.artifactId}</finalName>
+        
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
                 <filtering>true</filtering>
+                <includes>
+                    <include>**/*.yml</include>
+                    <include>**/*.yaml</include>
+                    <include>**/*.properties</include>
+                </includes>
             </resource>
         </resources>
+        
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -71,18 +93,53 @@
                 <configuration>
                     <source>21</source>
                     <target>21</target>
+                    <encoding>UTF-8</encoding>
                 </configuration>
             </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.5.0</version>
+                <version>3.6.0</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
                         <goals>
                             <goal>shade</goal>
                         </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <minimizeJar>false</minimizeJar>
+                            <artifactSet>
+                                <includes>
+                                    <include>org.telegram:telegrambots</include>
+                                    <include>org.telegram:telegrambots-meta</include>
+                                    <include>org.apache.httpcomponents:*</include>
+                                    <include>com.fasterxml.jackson.core:*</include>
+                                    <include>org.glassfish.jersey:*</include>
+                                    <include>jakarta.ws.rs:*</include>
+                                    <include>jakarta.annotation:*</include>
+                                    <include>org.glassfish.hk2:*</include>
+                                    <include>org.javassist:*</include>
+                                </includes>
+                            </artifactSet>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <relocations>
+                                <relocation>
+                                    <pattern>org.telegram</pattern>
+                                    <shadedPattern>com.grifmcpo.shaded.telegram</shadedPattern>
+                                </relocation>
+                            </relocations>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
