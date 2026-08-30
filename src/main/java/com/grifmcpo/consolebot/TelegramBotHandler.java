@@ -282,6 +282,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 "!rcon global lpinfo <ник> - информация о игроке\n" +
                 "!rcon global pex user <ник> - информация о игроке\n" +
                 "!rcon global pex group - список групп\n" +
+                "!rcon global console <текст> - отправить текст в консоль\n" +
                 "!rcon global bc <текст> - объявление в чат\n\n" +
                 "Флаг -s делает наказание скрытым (без оповещений)";
         sendMessage(chatId, msg);
@@ -366,6 +367,9 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
             case "pex":
                 handlePex(chatId, cmd);
+                break;
+            case "console":
+                handleConsole(chatId, cmd, userId);
                 break;
             case "bc":
             case "bcast":
@@ -992,6 +996,26 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         } catch (Exception e) {
             sendMessage(chatId, "[БОТ] Ошибка: " + e.getMessage());
         }
+    }
+
+    // =========================================================
+    // ==== CONSOLE =====
+    // =========================================================
+    private void handleConsole(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global console <текст>");
+            return;
+        }
+
+        String text = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
+        String sender = plugin.getCustomSender(userId);
+        if (sender == null) sender = "RCON@" + userId;
+
+        Bukkit.getConsoleSender().sendMessage("§7[TelegramConsoleBot] " + text + " §7(От: " + sender + "§7)");
+        plugin.getLogger().info("[Console] " + text + " (От: " + sender + ")");
+
+        sendMessage(chatId, "[БОТ] Ответ от сервера:\nКоманда отправлена в консоль: " + text);
     }
 
     // =========================================================
