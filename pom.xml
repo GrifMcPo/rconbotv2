@@ -29,6 +29,11 @@
             <id>central</id>
             <url>https://repo1.maven.org/maven2/</url>
         </repository>
+        <!-- LuckPerms репозиторий -->
+        <repository>
+            <id>luckperms</id>
+            <url>https://repo.luckperms.net/</url>
+        </repository>
     </repositories>
 
     <dependencies>
@@ -61,7 +66,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- LuckPerms API (provided - уже есть на сервере) -->
+        <!-- LuckPerms API (из официального репозитория) -->
         <dependency>
             <groupId>net.luckperms</groupId>
             <artifactId>luckperms-api</artifactId>
@@ -130,6 +135,7 @@
                                         <exclude>META-INF/*.SF</exclude>
                                         <exclude>META-INF/*.DSA</exclude>
                                         <exclude>META-INF/*.RSA</exclude>
+                                        <exclude>META-INF/*.MF</exclude>
                                     </excludes>
                                 </filter>
                             </filters>
