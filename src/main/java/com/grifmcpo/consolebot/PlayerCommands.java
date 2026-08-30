@@ -58,9 +58,6 @@ public class PlayerCommands implements CommandExecutor {
         }
     }
 
-    // =========================================================
-    // ==== BAN =====
-    // =========================================================
     private boolean handleBan(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.ban")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -107,9 +104,6 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
-    // =========================================================
-    // ==== BANUUID =====
-    // =========================================================
     private boolean handleBanUuid(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.ban")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -163,9 +157,6 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
-    // =========================================================
-    // ==== MUTE =====
-    // =========================================================
     private boolean handleMute(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.mute")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -212,9 +203,6 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
-    // =========================================================
-    // ==== KICK =====
-    // =========================================================
     private boolean handleKick(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.kick")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -247,9 +235,6 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
-    // =========================================================
-    // ==== WARN =====
-    // =========================================================
     private boolean handleWarn(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.warn")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -282,9 +267,6 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
-    // =========================================================
-    // ==== UNWARN =====
-    // =========================================================
     private boolean handleUnwarn(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.warn")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -310,9 +292,6 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
-    // =========================================================
-    // ==== BROADCAST =====
-    // =========================================================
     private boolean handleBroadcast(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.bc")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -333,9 +312,6 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
-    // =========================================================
-    // ==== LOGS =====
-    // =========================================================
     private boolean handleLogs(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.logs")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
@@ -359,9 +335,6 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
-    // =========================================================
-    // ==== DUPEIP =====
-    // =========================================================
     private boolean handleDupeip(CommandSender sender, String[] args) {
         if (!sender.hasPermission("telegramconsolebot.dupeip")) {
             sender.sendMessage("§cУ вас нет прав на использование этой команды!");
