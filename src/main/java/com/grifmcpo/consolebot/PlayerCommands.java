@@ -1,8 +1,6 @@
 package com.grifmcpo.consolebot;
 
-import net.luckperms.api.LuckPerms;
-import net.luckperms.api.model.group.Group;
-import net.luckperms.api.model.user.User;
+import net.milkbowl.vault.permission.Permission;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -71,8 +69,6 @@ public class PlayerCommands implements CommandExecutor {
 
         if (args.length < 2) {
             sender.sendMessage("§cИспользование: /ban <ник> [время] <причина> [-s]");
-            sender.sendMessage("§7Пример: /ban Stive Читер - бан навсегда");
-            sender.sendMessage("§7Пример: /ban Stive 1d Читер - бан на 1 день");
             return true;
         }
 
@@ -122,7 +118,6 @@ public class PlayerCommands implements CommandExecutor {
 
         if (args.length < 2) {
             sender.sendMessage("§cИспользование: /banuuid <uuid> [время] <причина> [-s]");
-            sender.sendMessage("§7Пример: /banuuid 123e4567-e89b-12d3-a456-426614174000 Читер");
             return true;
         }
 
@@ -179,7 +174,6 @@ public class PlayerCommands implements CommandExecutor {
 
         if (args.length < 2) {
             sender.sendMessage("§cИспользование: /mute <ник> [время] <причина> [-s]");
-            sender.sendMessage("§7Пример: /mute Stive Читер - мут навсегда");
             return true;
         }
 
@@ -387,7 +381,7 @@ public class PlayerCommands implements CommandExecutor {
             return true;
         }
 
-        java.util.List<String> playersWithSameIp = playerManager.getPlayersByIp(targetIp);
+        List<String> playersWithSameIp = playerManager.getPlayersByIp(targetIp);
         playersWithSameIp.remove(playerName);
 
         StringBuilder response = new StringBuilder();
@@ -423,33 +417,27 @@ public class PlayerCommands implements CommandExecutor {
         Player target = Bukkit.getPlayer(playerName);
         boolean isOnline = target != null && target.isOnline();
 
-        // Проверка прав по группам LuckPerms
+        // Проверка прав по группам через Vault
         if (sender instanceof Player) {
             Player senderPlayer = (Player) sender;
             try {
-                LuckPerms luckPerms = Bukkit.getServicesManager().getRegistration(LuckPerms.class).getProvider();
-                if (luckPerms != null) {
-                    User senderUser = luckPerms.getUserManager().getUser(senderPlayer.getUniqueId());
-                    User targetUser = luckPerms.getUserManager().getUser(playerName);
+                Permission permission = Bukkit.getServicesManager().getRegistration(Permission.class).getProvider();
+                if (permission != null) {
+                    String senderGroup = permission.getPrimaryGroup(senderPlayer);
+                    String targetGroup = permission.getPrimaryGroup(playerName);
                     
-                    if (senderUser != null && targetUser != null) {
-                        String senderGroup = senderUser.getPrimaryGroup();
-                        String targetGroup = targetUser.getPrimaryGroup();
+                    if (senderGroup != null && targetGroup != null) {
+                        int senderWeight = getGroupWeight(senderGroup);
+                        int targetWeight = getGroupWeight(targetGroup);
                         
-                        // Если группа отправителя ниже группы цели
-                        if (senderGroup != null && targetGroup != null) {
-                            int senderWeight = getGroupWeight(luckPerms, senderGroup);
-                            int targetWeight = getGroupWeight(luckPerms, targetGroup);
-                            
-                            if (senderWeight < targetWeight) {
-                                sender.sendMessage("§cВы не можете узнать информацию об этом игроке!");
-                                return true;
-                            }
+                        if (senderWeight < targetWeight) {
+                            sender.sendMessage("§cВы не можете узнать информацию об этом игроке!");
+                            return true;
                         }
                     }
                 }
             } catch (Exception e) {
-                // Если ошибка с LuckPerms - пропускаем проверку
+                // Если ошибка - пропускаем проверку
             }
         }
 
@@ -459,14 +447,17 @@ public class PlayerCommands implements CommandExecutor {
         return true;
     }
 
-    private int getGroupWeight(LuckPerms luckPerms, String groupName) {
-        try {
-            Group group = luckPerms.getGroupManager().getGroup(groupName);
-            if (group != null) {
-                return group.getCachedData().getMetaData().getMetaValue("weight", 0);
-            }
-        } catch (Exception e) {}
-        return 0;
+    private int getGroupWeight(String groupName) {
+        Map<String, Integer> weights = new HashMap<>();
+        weights.put("owner", 100);
+        weights.put("admin", 80);
+        weights.put("mod", 60);
+        weights.put("moderator", 60);
+        weights.put("helper", 40);
+        weights.put("builder", 30);
+        weights.put("default", 0);
+        weights.put("member", 0);
+        return weights.getOrDefault(groupName.toLowerCase(), 0);
     }
 
     // =========================================================
@@ -510,36 +501,15 @@ public class PlayerCommands implements CommandExecutor {
 
         try {
             if (isOnline) {
-                isOnline = target.isOp();
                 uuid = target.getUniqueId().toString();
-                try {
-                    net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
-                            .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
-                    if (permission != null) {
-                        group = permission.getPrimaryGroup(target);
-                    }
-                } catch (Exception e) {
-                    group = "неизвестно";
+                Permission permission = Bukkit.getServicesManager().getRegistration(Permission.class).getProvider();
+                if (permission != null) {
+                    group = permission.getPrimaryGroup(target);
                 }
             } else {
                 group = "офлайн";
                 uuid = "—";
-                // Пробуем через LuckPerms
-                try {
-                    LuckPerms luckPerms = Bukkit.getServicesManager().getRegistration(LuckPerms.class).getProvider();
-                    if (luckPerms != null) {
-                        User user = luckPerms.getUserManager().loadUser(playerName).join();
-                        if (user != null) {
-                            uuid = user.getUniqueId().toString();
-                            String primaryGroup = user.getPrimaryGroup();
-                            if (primaryGroup != null) {
-                                group = primaryGroup;
-                            }
-                        }
-                    }
-                } catch (Exception e) {}
             }
-
         } catch (Exception e) {
             sender.sendMessage("§cОшибка: " + e.getMessage());
             return true;
@@ -556,37 +526,38 @@ public class PlayerCommands implements CommandExecutor {
 
     private boolean handlePexGroup(CommandSender sender) {
         try {
-            LuckPerms luckPerms = Bukkit.getServicesManager().getRegistration(LuckPerms.class).getProvider();
-            if (luckPerms == null) {
-                sender.sendMessage("§cLuckPerms не найден!");
+            Permission permission = Bukkit.getServicesManager().getRegistration(Permission.class).getProvider();
+            if (permission == null) {
+                sender.sendMessage("§cVault не найден!");
                 return true;
             }
 
-            List<Group> groups = new ArrayList<>(luckPerms.getGroupManager().getLoadedGroups());
-            
-            // Сортируем по приоритету (весу)
-            groups.sort((a, b) -> {
-                int weightA = a.getCachedData().getMetaData().getMetaValue("weight", 0);
-                int weightB = b.getCachedData().getMetaData().getMetaValue("weight", 0);
-                return Integer.compare(weightB, weightA);
-            });
+            Map<String, Integer> groupCounts = new HashMap<>();
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                String group = permission.getPrimaryGroup(player);
+                if (group != null) {
+                    groupCounts.put(group, groupCounts.getOrDefault(group, 0) + 1);
+                }
+            }
+
+            List<String> sortedGroups = Arrays.asList("owner", "admin", "mod", "helper", "builder", "default");
 
             StringBuilder response = new StringBuilder();
             response.append("§6Доступные группы:\n");
             response.append("§7━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
             
-            for (Group group : groups) {
-                int count = luckPerms.getUserManager().getUsersInGroup(group.getName()).size();
-                response.append("§f - ").append(group.getName()).append(" §7(").append(count).append(" игроков)\n");
+            for (String group : sortedGroups) {
+                int count = groupCounts.getOrDefault(group, 0);
+                response.append("§f - ").append(group).append(" §7(").append(count).append(" игроков)\n");
             }
             
             response.append("§7━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-            response.append("§7Всего групп: §f").append(groups.size());
+            response.append("§7Всего групп: §f").append(sortedGroups.size());
 
             sender.sendMessage(response.toString());
             
         } catch (Exception e) {
-            sender.sendMessage("§cОшибка получения групп: " + e.getMessage());
+            sender.sendMessage("§cОшибка: " + e.getMessage());
         }
         return true;
     }
