@@ -846,7 +846,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     }
 
     // =========================================================
-    // ==== LPINFO (через Vault) =====
+    // ==== LPINFO =====
     // =========================================================
     private void handleLpInfo(long chatId, String cmd) {
         String[] parts = cmd.split(" ");
@@ -870,15 +870,26 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
                     .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
             
-            if (permission != null && isOnline) {
-                group = permission.getPrimaryGroup(target);
-                try {
-                    prefix = permission.getPlayerPrefix(target);
-                } catch (Exception e) { prefix = ""; }
-                try {
-                    suffix = permission.getPlayerSuffix(target);
-                } catch (Exception e) { suffix = ""; }
-                primaryGroup = group != null ? group : "default";
+            if (permission != null) {
+                if (isOnline) {
+                    String worldName = target.getWorld().getName();
+                    group = permission.getPrimaryGroup(target);
+                    primaryGroup = group != null ? group : "default";
+                    
+                    // Получаем префикс и суффикс с миром
+                    try {
+                        prefix = permission.getPlayerPrefix(target, worldName);
+                        suffix = permission.getPlayerSuffix(target, worldName);
+                    } catch (Exception e) {
+                        // Если не работает с миром, пробуем без мира
+                        try {
+                            prefix = permission.getPlayerPrefix(target);
+                            suffix = permission.getPlayerSuffix(target);
+                        } catch (Exception ex) {
+                            // Если всё упало - оставляем пустым
+                        }
+                    }
+                }
             }
 
             String response = "[БОТ] Ответ от сервера:\n";
@@ -890,8 +901,8 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             response += "[LP]     > " + primaryGroup + "\n";
             response += "[LP] - Contextual Data: \n";
             response += "[LP]     Contexts: None\n";
-            response += "[LP]     Prefix: \"" + (prefix != null ? prefix : "") + "\"\n";
-            response += "[LP]     Suffix: \"" + (suffix != null ? suffix : "") + "\"\n";
+            response += "[LP]     Prefix: \"" + (prefix != null && !prefix.isEmpty() ? prefix : "—") + "\"\n";
+            response += "[LP]     Suffix: \"" + (suffix != null && !suffix.isEmpty() ? suffix : "") + "\"\n";
             response += "[LP]     Primary Group: " + primaryGroup + "\n";
             response += "[LP]     Meta: (default=true) (primarygroup=" + primaryGroup + ")";
 
