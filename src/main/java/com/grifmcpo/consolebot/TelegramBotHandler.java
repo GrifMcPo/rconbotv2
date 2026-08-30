@@ -863,7 +863,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             String group = "default";
             String uuid = isOnline ? target.getUniqueId().toString() : "—";
             String status = isOnline ? "Online" : "Offline";
-            String prefix = "";
             String primaryGroup = "default";
             
             net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
@@ -872,14 +871,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             if (permission != null && isOnline) {
                 group = permission.getPrimaryGroup(target);
                 primaryGroup = group != null ? group : "default";
-                
-                // Получаем префикс через Vault (если метод есть)
-                try {
-                    prefix = permission.getPlayerPrefix(target);
-                } catch (Exception e) {
-                    // Если метода нет - используем группу как префикс
-                    prefix = "[" + primaryGroup + "]";
-                }
             }
 
             String response = "[БОТ] Ответ от сервера:\n";
@@ -891,7 +882,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             response += "[LP]     > " + primaryGroup + "\n";
             response += "[LP] - Contextual Data: \n";
             response += "[LP]     Contexts: None\n";
-            response += "[LP]     Prefix: \"" + (prefix != null && !prefix.isEmpty() ? prefix : "—") + "\"\n";
+            response += "[LP]     Prefix: \"\"\n";
             response += "[LP]     Suffix: \"\"\n";
             response += "[LP]     Primary Group: " + primaryGroup + "\n";
             response += "[LP]     Meta: (default=true) (primarygroup=" + primaryGroup + ")";
