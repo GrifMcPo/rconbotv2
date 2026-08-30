@@ -1176,6 +1176,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         final long finalChatId = chatId;
         final String finalCommand = command;
+        final String finalIssuer = issuer;
 
         final int[] tempMsgId = {0};
         try {
@@ -1189,7 +1190,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         final int finalTempMsgId = tempMsgId[0];
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            commandExecutor.executeCommand(finalCommand, issuer);
+            commandExecutor.executeCommand(finalCommand, finalIssuer);
             if (finalTempMsgId != 0) {
                 deleteMessage(String.valueOf(finalChatId), finalTempMsgId);
             }
