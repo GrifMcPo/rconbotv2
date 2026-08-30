@@ -864,31 +864,21 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             String uuid = isOnline ? target.getUniqueId().toString() : "—";
             String status = isOnline ? "Online" : "Offline";
             String prefix = "";
-            String suffix = "";
             String primaryGroup = "default";
             
             net.milkbowl.vault.permission.Permission permission = Bukkit.getServicesManager()
                     .getRegistration(net.milkbowl.vault.permission.Permission.class).getProvider();
             
-            if (permission != null) {
-                if (isOnline) {
-                    String worldName = target.getWorld().getName();
-                    group = permission.getPrimaryGroup(target);
-                    primaryGroup = group != null ? group : "default";
-                    
-                    // Получаем префикс и суффикс с миром
-                    try {
-                        prefix = permission.getPlayerPrefix(target, worldName);
-                        suffix = permission.getPlayerSuffix(target, worldName);
-                    } catch (Exception e) {
-                        // Если не работает с миром, пробуем без мира
-                        try {
-                            prefix = permission.getPlayerPrefix(target);
-                            suffix = permission.getPlayerSuffix(target);
-                        } catch (Exception ex) {
-                            // Если всё упало - оставляем пустым
-                        }
-                    }
+            if (permission != null && isOnline) {
+                group = permission.getPrimaryGroup(target);
+                primaryGroup = group != null ? group : "default";
+                
+                // Получаем префикс через Vault (если метод есть)
+                try {
+                    prefix = permission.getPlayerPrefix(target);
+                } catch (Exception e) {
+                    // Если метода нет - используем группу как префикс
+                    prefix = "[" + primaryGroup + "]";
                 }
             }
 
@@ -902,7 +892,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             response += "[LP] - Contextual Data: \n";
             response += "[LP]     Contexts: None\n";
             response += "[LP]     Prefix: \"" + (prefix != null && !prefix.isEmpty() ? prefix : "—") + "\"\n";
-            response += "[LP]     Suffix: \"" + (suffix != null && !suffix.isEmpty() ? suffix : "") + "\"\n";
+            response += "[LP]     Suffix: \"\"\n";
             response += "[LP]     Primary Group: " + primaryGroup + "\n";
             response += "[LP]     Meta: (default=true) (primarygroup=" + primaryGroup + ")";
 
