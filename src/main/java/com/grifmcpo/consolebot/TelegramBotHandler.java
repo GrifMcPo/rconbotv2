@@ -872,8 +872,12 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             
             if (permission != null && isOnline) {
                 group = permission.getPrimaryGroup(target);
-                prefix = permission.getPlayerPrefix(target) != null ? permission.getPlayerPrefix(target) : "";
-                suffix = permission.getPlayerSuffix(target) != null ? permission.getPlayerSuffix(target) : "";
+                try {
+                    prefix = permission.getPlayerPrefix(target);
+                } catch (Exception e) { prefix = ""; }
+                try {
+                    suffix = permission.getPlayerSuffix(target);
+                } catch (Exception e) { suffix = ""; }
                 primaryGroup = group != null ? group : "default";
             }
 
@@ -886,8 +890,8 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             response += "[LP]     > " + primaryGroup + "\n";
             response += "[LP] - Contextual Data: \n";
             response += "[LP]     Contexts: None\n";
-            response += "[LP]     Prefix: \"" + prefix + "\"\n";
-            response += "[LP]     Suffix: \"" + suffix + "\"\n";
+            response += "[LP]     Prefix: \"" + (prefix != null ? prefix : "") + "\"\n";
+            response += "[LP]     Suffix: \"" + (suffix != null ? suffix : "") + "\"\n";
             response += "[LP]     Primary Group: " + primaryGroup + "\n";
             response += "[LP]     Meta: (default=true) (primarygroup=" + primaryGroup + ")";
 
@@ -895,6 +899,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             
         } catch (Exception e) {
             sendMessage(chatId, "[БОТ] Ошибка: " + e.getMessage());
+            plugin.getLogger().warning("LPInfo error: " + e.getMessage());
         }
     }
 
