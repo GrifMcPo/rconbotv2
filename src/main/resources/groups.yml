@@ -3,7 +3,7 @@
 
 staff:
   users:
-    - 8308522569
+    - 8308522561
     - 987654321
   permissions:
     - "!rcon global ban"
@@ -30,12 +30,12 @@ leader:
 
 admin:
   users:
-    - 8889631346
+    - 8308522569
   permissions:
     - ALL
 
 owner:
   users:
-    - 8889631346
+    - 8308522569
   permissions:
     - ALL
