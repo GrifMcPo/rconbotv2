@@ -3,7 +3,7 @@ package com.grifmcpo.consolebot;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException; 
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 import java.io.File;
@@ -26,6 +26,7 @@ public class TelegramConsoleBot extends JavaPlugin {
     private BotBanManager botBanManager;
     private GroupManager groupManager;
     private TechWorksManager techWorksManager;
+    private PrivateMessageManager privateMessageManager;
     private TelegramBotHandler botHandler;
 
     @Override
@@ -50,10 +51,12 @@ public class TelegramConsoleBot extends JavaPlugin {
         botBanManager = new BotBanManager(this);
         groupManager = new GroupManager(this);
         techWorksManager = new TechWorksManager(this);
+        privateMessageManager = new PrivateMessageManager(this);
 
         Bukkit.getPluginManager().registerEvents(punishmentManager, this);
         Bukkit.getPluginManager().registerEvents(commandLogger, this);
         Bukkit.getPluginManager().registerEvents(techWorksManager, this);
+        Bukkit.getPluginManager().registerEvents(privateMessageManager, this);
 
         // ===== РЕГИСТРАЦИЯ КОМАНД ДЛЯ ИГРОКОВ =====
         PlayerCommands playerCommands = new PlayerCommands(this, punishmentManager, playerManager, commandLogger);
@@ -158,5 +161,6 @@ public class TelegramConsoleBot extends JavaPlugin {
     public BotBanManager getBotBanManager() { return botBanManager; }
     public GroupManager getGroupManager() { return groupManager; }
     public TechWorksManager getTechWorksManager() { return techWorksManager; }
+    public PrivateMessageManager getPrivateMessageManager() { return privateMessageManager; }
     public TelegramBotHandler getBotHandler() { return botHandler; }
 }
