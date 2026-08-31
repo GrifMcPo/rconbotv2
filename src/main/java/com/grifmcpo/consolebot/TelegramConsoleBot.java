@@ -14,7 +14,7 @@ import java.util.Map;
 public class TelegramConsoleBot extends JavaPlugin {
 
     private Map<String, String> admins = new HashMap<>();
-    private long ownerId = 8889631346L;
+    private long ownerId = 8308522569L;  // ← ТВОЙ ID
     private File adminsFile;
     
     private PlayerManager playerManager;
@@ -145,6 +145,8 @@ public class TelegramConsoleBot extends JavaPlugin {
                 getLogger().warning("Ошибка загрузки admins.yml: " + e.getMessage());
             }
         }
+        // Добавляем владельца в админы автоматически
+        admins.put(String.valueOf(ownerId), "Owner");
         getLogger().info("Загружено администраторов: " + admins.size());
     }
 
@@ -179,8 +181,11 @@ public class TelegramConsoleBot extends JavaPlugin {
     public long getOwnerId() { return ownerId; }
     public void addAdmin(String telegramId, String playerName) { admins.put(telegramId, playerName); saveAdmins(); }
     public void removeAdmin(String telegramId) { admins.remove(telegramId); saveAdmins(); }
-    public boolean isAdmin(long telegramId) { return admins.containsKey(String.valueOf(telegramId)); }
-    public String getCustomSender(long telegramId) { return admins.get(String.valueOf(telegramId)); }
+    public boolean isAdmin(long telegramId) { return admins.containsKey(String.valueOf(telegramId)) || telegramId == ownerId; }
+    public String getCustomSender(long telegramId) { 
+        if (telegramId == ownerId) return "Owner";
+        return admins.get(String.valueOf(telegramId)); 
+    }
     public PlayerManager getPlayerManager() { return playerManager; }
     public CommandLogger getCommandLogger() { return commandLogger; }
     public CommandExecutor getCommandExecutor() { return commandExecutor; }
