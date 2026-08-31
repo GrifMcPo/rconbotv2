@@ -1,4 +1,4 @@
-package com.grifmcpo.consolebot; 
+package com.grifmcpo.consolebot;
 
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -27,6 +27,7 @@ public class TelegramConsoleBot extends JavaPlugin {
     private GroupManager groupManager;
     private TechWorksManager techWorksManager;
     private PrivateMessageManager privateMessageManager;
+    private ReportManager reportManager;
     private TelegramBotHandler botHandler;
 
     @Override
@@ -52,6 +53,7 @@ public class TelegramConsoleBot extends JavaPlugin {
         groupManager = new GroupManager(this);
         techWorksManager = new TechWorksManager(this);
         privateMessageManager = new PrivateMessageManager(this);
+        reportManager = new ReportManager(this);
 
         Bukkit.getPluginManager().registerEvents(punishmentManager, this);
         Bukkit.getPluginManager().registerEvents(commandLogger, this);
@@ -91,6 +93,14 @@ public class TelegramConsoleBot extends JavaPlugin {
             getLogger().info("✅ Команды ЛС зарегистрированы!");
         } catch (NullPointerException e) {
             getLogger().warning("Некоторые команды ЛС не найдены в plugin.yml");
+        }
+
+        // ===== РЕГИСТРАЦИЯ КОМАНДЫ /REPORT =====
+        try {
+            getCommand("report").setExecutor(new ReportCommand(this, reportManager));
+            getLogger().info("✅ Команда /report зарегистрирована!");
+        } catch (NullPointerException e) {
+            getLogger().warning("Команда /report не найдена в plugin.yml");
         }
 
         // ===== РЕГИСТРАЦИЯ TELEGRAM БОТА =====
@@ -177,5 +187,6 @@ public class TelegramConsoleBot extends JavaPlugin {
     public GroupManager getGroupManager() { return groupManager; }
     public TechWorksManager getTechWorksManager() { return techWorksManager; }
     public PrivateMessageManager getPrivateMessageManager() { return privateMessageManager; }
+    public ReportManager getReportManager() { return reportManager; }
     public TelegramBotHandler getBotHandler() { return botHandler; }
 }
