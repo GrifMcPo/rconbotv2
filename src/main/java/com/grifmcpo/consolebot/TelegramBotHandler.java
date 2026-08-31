@@ -1391,7 +1391,7 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 }
                 String botName = parts[2];
                 
-                if (!botManager.bots.containsKey(botName.toLowerCase())) {
+                if (!botManager.botExists(botName)) {
                     boolean created = botManager.createBot(botName);
                     if (!created) {
                         sendMessage(chatId, "[БОТ] ❌ Не удалось создать бота!");
