@@ -111,7 +111,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         saveKnownUser(userId);
         plugin.getLogger().info("Получено: " + messageText + " от " + userId);
 
-        // ===== ПРОВЕРКА ТЕХНИЧЕСКИХ РАБОТ =====
         if (plugin.getTechWorksManager().isTechMode()) {
             if (!plugin.isAdmin(userId) && userId != plugin.getOwnerId()) {
                 String reason = plugin.getTechWorksManager().getKickReason();
@@ -300,6 +299,12 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 "!rcon global blackserver <ник/uuid> - добавить в ЧС\n" +
                 "!rcon global unblackserver <ник/uuid> - удалить из ЧС\n" +
                 "!rcon global blacklist - список черного списка\n" +
+                "!rcon global report list - список активных жалоб\n" +
+                "!rcon global report listall - список всех жалоб\n" +
+                "!rcon global report close <номер> - закрыть жалобу\n" +
+                "!rcon global report closeall - закрыть все жалобы\n" +
+                "!rcon global encrypt <текст> - зашифровать текст\n" +
+                "!rcon global decrypt <текст> - расшифровать текст\n" +
                 "!rcon global bc <текст> - объявление в чат\n\n" +
                 "Флаг -s делает наказание скрытым (без оповещений)";
         sendMessage(chatId, msg);
@@ -404,6 +409,15 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
             case "blacklist":
                 handleBlacklist(chatId);
+                break;
+            case "report":
+                handleReport(chatId, cmd, userId);
+                break;
+            case "encrypt":
+                handleEncrypted(chatId, cmd, userId);
+                break;
+            case "decrypt":
+                handleDecrypt(chatId, cmd, userId);
                 break;
             case "bc":
             case "bcast":
@@ -1254,6 +1268,121 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
     private void handleBlacklist(long chatId) {
         String info = plugin.getTechWorksManager().getBlacklistInfo();
         sendMessage(chatId, info);
+    }
+
+    // =========================================================
+    // ==== REPORT (СИСТЕМА РЕПОРТОВ) =====
+    // =========================================================
+    private void handleReport(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global report <list/close/closeall>");
+            return;
+        }
+
+        String action = parts[1].toLowerCase();
+
+        // Проверяем права (только группа owner)
+        if (!groupManager.isOwner(userId)) {
+            sendMessage(chatId, "[БОТ] У вас нет доступа к системе репортов!");
+            sendMessage(chatId, "[БОТ] Доступ только у группы owner.");
+            return;
+        }
+
+        ReportManager reportManager = plugin.getReportManager();
+
+        switch (action) {
+            case "list": {
+                List<ReportManager.Report> reports = reportManager.getActiveReports();
+                String response = reportManager.getFormattedReportList(reports);
+                sendMessage(chatId, response);
+                break;
+            }
+
+            case "listall": {
+                List<ReportManager.Report> reports = reportManager.getAllReports();
+                String response = reportManager.getFormattedReportList(reports);
+                sendMessage(chatId, response);
+                break;
+            }
+
+            case "close": {
+                if (parts.length < 3) {
+                    sendMessage(chatId, "[БОТ] Использование: !rcon global report close <номер>");
+                    return;
+                }
+                try {
+                    int id = Integer.parseInt(parts[2]);
+                    String issuer = plugin.getCustomSender(userId);
+                    if (issuer == null) issuer = "RCON@" + userId;
+                    
+                    boolean success = reportManager.closeReport(id, issuer);
+                    if (success) {
+                        sendMessage(chatId, "[БОТ] ✅ Жалоба #" + id + " закрыта!");
+                    } else {
+                        sendMessage(chatId, "[БОТ] ❌ Жалоба #" + id + " не найдена или уже закрыта!");
+                    }
+                } catch (NumberFormatException e) {
+                    sendMessage(chatId, "[БОТ] ❌ Неверный номер жалобы!");
+                }
+                break;
+            }
+
+            case "closeall": {
+                String issuer = plugin.getCustomSender(userId);
+                if (issuer == null) issuer = "RCON@" + userId;
+                
+                int count = reportManager.closeAllReports(issuer);
+                if (count > 0) {
+                    sendMessage(chatId, "[БОТ] ✅ Закрыто жалоб: " + count);
+                } else {
+                    sendMessage(chatId, "[БОТ] ❌ Нет открытых жалоб!");
+                }
+                break;
+            }
+
+            default:
+                sendMessage(chatId, "[БОТ] Неизвестная подкоманда!\n" +
+                        "Использование: !rcon global report <list/close/closeall>");
+                break;
+        }
+    }
+
+    // =========================================================
+    // ==== ШИФРОВАНИЕ =====
+    // =========================================================
+    private void handleEncrypted(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global encrypt <данные>");
+            return;
+        }
+
+        String data = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
+        String encrypted = EncryptionManager.encryptForBot(data, userId);
+        
+        if (encrypted != null) {
+            sendMessage(chatId, "[БОТ] 🔐 Зашифрованные данные:\n" + encrypted);
+        } else {
+            sendMessage(chatId, "[БОТ] ❌ Ошибка шифрования!");
+        }
+    }
+
+    private void handleDecrypt(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global decrypt <данные>");
+            return;
+        }
+
+        String encrypted = parts[1];
+        String decrypted = EncryptionManager.decryptFromBot(encrypted);
+        
+        if (decrypted != null) {
+            sendMessage(chatId, "[БОТ] 🔓 Расшифрованные данные:\n" + decrypted);
+        } else {
+            sendMessage(chatId, "[БОТ] ❌ Ошибка расшифровки!");
+        }
     }
 
     // =========================================================
