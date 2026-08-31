@@ -1,7 +1,6 @@
 package com.grifmcpo.consolebot;
 
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -9,7 +8,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -17,7 +15,6 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import java.io.File;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.UUID;
 
 public class BotManager implements Listener {
 
@@ -96,9 +93,6 @@ public class BotManager implements Listener {
         }
     }
 
-    // =========================================================
-    // ==== СОЗДАНИЕ БОТА =====
-    // =========================================================
     public boolean createBot(String name) {
         if (bots.containsKey(name.toLowerCase())) {
             return false;
@@ -112,9 +106,6 @@ public class BotManager implements Listener {
         return true;
     }
 
-    // =========================================================
-    // ==== ЗАПУСК БОТА =====
-    // =========================================================
     public boolean startBot(String name) {
         Bot bot = bots.get(name.toLowerCase());
         if (bot == null) return false;
@@ -128,10 +119,9 @@ public class BotManager implements Listener {
     }
 
     private void spawnBot(Bot bot) {
-        if (bot.player != null) return;
+        if (bot.player != null && bot.player.isOnline()) return;
         
         try {
-            // Создаем NPC игрока
             World world = Bukkit.getWorld(bot.world != null ? bot.world : "world");
             if (world == null) {
                 world = Bukkit.getWorlds().get(0);
@@ -139,62 +129,75 @@ public class BotManager implements Listener {
             
             Location loc = new Location(world, bot.x, bot.y, bot.z, bot.yaw, bot.pitch);
             
-            // Симулируем вход игрока
-            bot.player = Bukkit.getPlayerExact(bot.name);
-            if (bot.player == null) {
-                // Создаем "призрачного" игрока через команду
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), 
-                    "minecraft:op " + bot.name);
-                
-                // Добавляем бота в белый список
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), 
-                    "whitelist add " + bot.name);
-                
-                // Загружаем скин (через API)
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), 
-                    "lp user " + bot.name + " parent set default");
-                
-                // Используем Packet для создания NPC
-                // В реальности нужно использовать ProtocolLib или Citizens
-                // Для простоты используем обычного игрока
+            Player existing = Bukkit.getPlayerExact(bot.name);
+            if (existing != null) {
+                bot.player = existing;
+                bot.uuid = existing.getUniqueId().toString();
+                setupBotPlayer(existing);
+                return;
             }
             
-            // Сохраняем UUID
-            if (bot.player != null) {
-                bot.uuid = bot.player.getUniqueId().toString();
-                botUUIDs.put(bot.name.toLowerCase(), bot.player.getUniqueId());
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "minecraft:op " + bot.name);
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "whitelist add " + bot.name);
+            
+            if (Bukkit.getPluginManager().getPlugin("Citizens") != null) {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), 
+                    "npc create " + bot.name + " --type player");
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), 
+                    "npc tp " + bot.name + " " + loc.getX() + " " + loc.getY() + " " + loc.getZ());
             }
+            
+            bot.active = true;
+            saveBots();
             
         } catch (Exception e) {
             plugin.getLogger().warning("Ошибка при создании бота " + bot.name + ": " + e.getMessage());
         }
     }
 
-    // =========================================================
-    // ==== ВЫПОЛНЕНИЕ КОМАНДЫ ОТ ИМЕНИ БОТА =====
-    // =========================================================
+    private void setupBotPlayer(Player player) {
+        player.setInvisible(true);
+        player.setInvulnerable(true);
+        player.setAllowFlight(true);
+        player.setFlying(true);
+        player.setOp(true);
+        player.setHealth(9999);
+        player.setFoodLevel(9999);
+        player.setSaturation(9999);
+        player.setExp(1);
+        player.setLevel(9999);
+        player.setWalkSpeed(0.0f);
+        player.setFlySpeed(0.0f);
+        
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (!p.equals(player)) {
+                p.hidePlayer(plugin, player);
+            }
+        }
+        
+        player.setPlayerListName("§7§o" + player.getName());
+        player.setDisplayName("§7§o" + player.getName());
+        player.sendMessage("§aВы вошли как бот!");
+    }
+
     public boolean runCommand(String name, String command) {
         Bot bot = bots.get(name.toLowerCase());
         if (bot == null) return false;
         if (!bot.active) return false;
         
-        // Создаем фиктивного игрока для выполнения команды
-        // Используем консоль от имени бота
-        String finalCommand = command;
         String botName = name;
+        String finalCommand = command;
         
         Bukkit.getScheduler().runTask(plugin, () -> {
-            // Выполняем команду от имени бота
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), 
-                "lp user " + botName + " permission set * true");
+            Player botPlayer = Bukkit.getPlayerExact(botName);
+            if (botPlayer != null && botPlayer.isOnline()) {
+                Bukkit.dispatchCommand(botPlayer, finalCommand);
+            } else {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), finalCommand);
+            }
             
-            // Выполняем саму команду
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), finalCommand);
-            
-            // Логируем
             plugin.getLogger().info("🤖 Бот " + botName + " выполнил: " + finalCommand);
             
-            // Отправляем уведомление владельцу
             long ownerId = plugin.getOwnerId();
             plugin.sendMessageAsBot(ownerId, 
                 "[БОТ] 🤖 Бот " + botName + " выполнил команду:\n" + finalCommand);
@@ -203,9 +206,6 @@ public class BotManager implements Listener {
         return true;
     }
 
-    // =========================================================
-    // ==== ОСТАНОВКА БОТА =====
-    // =========================================================
     public boolean stopBot(String name) {
         Bot bot = bots.get(name.toLowerCase());
         if (bot == null) return false;
@@ -213,7 +213,6 @@ public class BotManager implements Listener {
         
         bot.active = false;
         
-        // Кикаем бота
         if (bot.player != null && bot.player.isOnline()) {
             bot.player.kickPlayer("§cБот остановлен!");
         }
@@ -224,9 +223,6 @@ public class BotManager implements Listener {
         return true;
     }
 
-    // =========================================================
-    // ==== УДАЛЕНИЕ БОТА =====
-    // =========================================================
     public boolean deleteBot(String name) {
         Bot bot = bots.get(name.toLowerCase());
         if (bot == null) return false;
@@ -241,9 +237,6 @@ public class BotManager implements Listener {
         return true;
     }
 
-    // =========================================================
-    // ==== СПИСОК БОТОВ =====
-    // =========================================================
     public String getBotList() {
         if (bots.isEmpty()) {
             return "[БОТ] Нет созданных ботов.";
@@ -263,8 +256,12 @@ public class BotManager implements Listener {
     }
 
     // =========================================================
-    // ==== ПРОВЕРКА БОТОВ =====
+    // ==== НОВЫЙ МЕТОД ДЛЯ ПРОВЕРКИ СУЩЕСТВОВАНИЯ БОТА =====
     // =========================================================
+    public boolean botExists(String name) {
+        return bots.containsKey(name.toLowerCase());
+    }
+
     private void startBotChecker() {
         new BukkitRunnable() {
             @Override
@@ -278,30 +275,24 @@ public class BotManager implements Listener {
         }.runTaskTimer(plugin, 20L * 30, 20L * 60);
     }
 
-    // =========================================================
-    // ==== СОБЫТИЯ =====
-    // =========================================================
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         String name = player.getName();
         
-        // Проверяем, является ли игрок ботом
         for (Bot bot : bots.values()) {
             if (bot.uuid != null && bot.uuid.equals(player.getUniqueId().toString())) {
                 bot.player = player;
                 bot.active = true;
-                // Делаем бота невидимым
-                player.setInvisible(true);
-                player.setInvulnerable(true);
-                player.setAllowFlight(true);
-                player.setFlying(true);
-                player.setOp(true);
-                // Скрываем бота из TAB
-                for (Player p : Bukkit.getOnlinePlayers()) {
-                    p.hidePlayer(plugin, player);
-                }
+                setupBotPlayer(player);
+                event.setJoinMessage(null);
                 break;
+            }
+        }
+        
+        for (Bot bot : bots.values()) {
+            if (bot.player != null && bot.player.isOnline() && !bot.player.equals(player)) {
+                player.hidePlayer(plugin, bot.player);
             }
         }
     }
@@ -309,13 +300,11 @@ public class BotManager implements Listener {
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
-        String name = player.getName();
         
         for (Bot bot : bots.values()) {
             if (bot.uuid != null && bot.uuid.equals(player.getUniqueId().toString())) {
                 bot.player = null;
                 if (bot.active) {
-                    // Пересоздаем бота через некоторое время
                     Bukkit.getScheduler().runTaskLater(plugin, () -> {
                         spawnBot(bot);
                     }, 20L * 5);
@@ -325,9 +314,6 @@ public class BotManager implements Listener {
         }
     }
 
-    // =========================================================
-    // ==== ВНУТРЕННИЙ КЛАСС =====
-    // =========================================================
     public static class Bot {
         public String name;
         public String uuid;
