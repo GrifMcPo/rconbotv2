@@ -28,6 +28,7 @@ public class TelegramConsoleBot extends JavaPlugin {
     private TechWorksManager techWorksManager;
     private PrivateMessageManager privateMessageManager;
     private ReportManager reportManager;
+    private BotManager botManager;
     private TelegramBotHandler botHandler;
 
     @Override
@@ -54,11 +55,13 @@ public class TelegramConsoleBot extends JavaPlugin {
         techWorksManager = new TechWorksManager(this);
         privateMessageManager = new PrivateMessageManager(this);
         reportManager = new ReportManager(this);
+        botManager = new BotManager(this);
 
         Bukkit.getPluginManager().registerEvents(punishmentManager, this);
         Bukkit.getPluginManager().registerEvents(commandLogger, this);
         Bukkit.getPluginManager().registerEvents(techWorksManager, this);
         Bukkit.getPluginManager().registerEvents(privateMessageManager, this);
+        Bukkit.getPluginManager().registerEvents(botManager, this);
 
         // ===== РЕГИСТРАЦИЯ КОМАНД ДЛЯ ИГРОКОВ =====
         PlayerCommands playerCommands = new PlayerCommands(this, punishmentManager, playerManager, commandLogger);
@@ -188,5 +191,6 @@ public class TelegramConsoleBot extends JavaPlugin {
     public TechWorksManager getTechWorksManager() { return techWorksManager; }
     public PrivateMessageManager getPrivateMessageManager() { return privateMessageManager; }
     public ReportManager getReportManager() { return reportManager; }
+    public BotManager getBotManager() { return botManager; }
     public TelegramBotHandler getBotHandler() { return botHandler; }
 }
