@@ -303,6 +303,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 "!rcon global report listall - список всех жалоб\n" +
                 "!rcon global report close <номер> - закрыть жалобу\n" +
                 "!rcon global report closeall - закрыть все жалобы\n" +
+                "!rcon global bot list - список ботов\n" +
+                "!rcon global bot <ник> start - запустить бота\n" +
+                "!rcon global bot <ник> runcmd <команда> - выполнить команду от имени бота\n" +
+                "!rcon global bot <ник> stop - остановить бота\n" +
+                "!rcon global bot <ник> delete - удалить бота\n" +
                 "!rcon global encrypt <текст> - зашифровать текст\n" +
                 "!rcon global decrypt <текст> - расшифровать текст\n" +
                 "!rcon global bc <текст> - объявление в чат\n\n" +
@@ -412,6 +417,9 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
             case "report":
                 handleReport(chatId, cmd, userId);
+                break;
+            case "bot":
+                handleBot(chatId, cmd, userId);
                 break;
             case "encrypt":
                 handleEncrypted(chatId, cmd, userId);
@@ -1344,6 +1352,116 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
             default:
                 sendMessage(chatId, "[БОТ] Неизвестная подкоманда!\n" +
                         "Использование: !rcon global report <list/close/closeall>");
+                break;
+        }
+    }
+
+    // =========================================================
+    // ==== BOT (СИСТЕМА БОТОВ) =====
+    // =========================================================
+    private void handleBot(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 2) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global bot <ник> <start/stop/runcmd/delete>");
+            sendMessage(chatId, "[БОТ] !rcon global bot list - список ботов");
+            return;
+        }
+
+        String action = parts[1].toLowerCase();
+
+        // Проверяем права (только owner)
+        if (userId != plugin.getOwnerId()) {
+            sendMessage(chatId, "[БОТ] ❌ Только владелец бота может управлять ботами!");
+            return;
+        }
+
+        BotManager botManager = plugin.getBotManager();
+
+        switch (action) {
+            case "list": {
+                String response = botManager.getBotList();
+                sendMessage(chatId, response);
+                break;
+            }
+
+            case "start": {
+                if (parts.length < 3) {
+                    sendMessage(chatId, "[БОТ] Использование: !rcon global bot <ник> start");
+                    return;
+                }
+                String botName = parts[2];
+                
+                if (!botManager.bots.containsKey(botName.toLowerCase())) {
+                    boolean created = botManager.createBot(botName);
+                    if (!created) {
+                        sendMessage(chatId, "[БОТ] ❌ Не удалось создать бота!");
+                        return;
+                    }
+                }
+                
+                boolean success = botManager.startBot(botName);
+                if (success) {
+                    sendMessage(chatId, "[БОТ] ✅ Бот " + botName + " запущен!");
+                    sendMessage(chatId, "[БОТ] 🤖 Бот зашел на сервер и готов к работе!");
+                } else {
+                    sendMessage(chatId, "[БОТ] ❌ Не удалось запустить бота!");
+                }
+                break;
+            }
+
+            case "runcmd": {
+                if (parts.length < 4) {
+                    sendMessage(chatId, "[БОТ] Использование: !rcon global bot <ник> runcmd <команда>");
+                    return;
+                }
+                String botName = parts[2];
+                String command = String.join(" ", Arrays.copyOfRange(parts, 3, parts.length));
+                
+                boolean success = botManager.runCommand(botName, command);
+                if (success) {
+                    sendMessage(chatId, "[БОТ] ✅ Команда отправлена от имени бота " + botName);
+                } else {
+                    sendMessage(chatId, "[БОТ] ❌ Бот " + botName + " не найден или не активен!");
+                }
+                break;
+            }
+
+            case "stop": {
+                if (parts.length < 3) {
+                    sendMessage(chatId, "[БОТ] Использование: !rcon global bot <ник> stop");
+                    return;
+                }
+                String botName = parts[2];
+                
+                boolean success = botManager.stopBot(botName);
+                if (success) {
+                    sendMessage(chatId, "[БОТ] ✅ Бот " + botName + " остановлен!");
+                } else {
+                    sendMessage(chatId, "[БОТ] ❌ Бот " + botName + " не найден или уже остановлен!");
+                }
+                break;
+            }
+
+            case "delete": {
+                if (parts.length < 3) {
+                    sendMessage(chatId, "[БОТ] Использование: !rcon global bot <ник> delete");
+                    return;
+                }
+                String botName = parts[2];
+                
+                boolean success = botManager.deleteBot(botName);
+                if (success) {
+                    sendMessage(chatId, "[БОТ] ✅ Бот " + botName + " удален!");
+                } else {
+                    sendMessage(chatId, "[БОТ] ❌ Бот " + botName + " не найден!");
+                }
+                break;
+            }
+
+            default:
+                sendMessage(chatId, "[БОТ] Неизвестная подкоманда!\n" +
+                        "Использование: !rcon global bot <ник> <start/stop/runcmd/delete>\n" +
+                        "!rcon global bot list");
                 break;
         }
     }
