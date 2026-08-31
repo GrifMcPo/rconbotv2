@@ -1,9 +1,10 @@
 name: TelegramConsoleBot
 version: 2.0
 main: com.grifmcpo.consolebot.TelegramConsoleBot
-api-version: 1.21
-author: GrifMcPO
-description: Telegram Console Bot with Auth System
+api-version: 1.13
+depend: [Vault, LuckPerms]
+author: GrifMcPo
+description: Telegram bot for server management
 
 commands:
   ban:
@@ -50,6 +51,34 @@ commands:
     description: Check player info or group list
     permission: telegramconsolebot.pex
     usage: /pex user <player> | /pex group
+  msg:
+    description: Send private message
+    permission: telegramconsolebot.msg
+    usage: /msg <player> <message>
+  tell:
+    description: Send private message
+    permission: telegramconsolebot.msg
+    usage: /tell <player> <message>
+  t:
+    description: Send private message
+    permission: telegramconsolebot.msg
+    usage: /t <player> <message>
+  r:
+    description: Reply to last message
+    permission: telegramconsolebot.msg
+    usage: /r <message>
+  reply:
+    description: Reply to last message
+    permission: telegramconsolebot.msg
+    usage: /reply <message>
+  togglemsg:
+    description: Toggle private messages
+    permission: telegramconsolebot.msg
+    usage: /togglemsg
+  msgtoggle:
+    description: Toggle private messages
+    permission: telegramconsolebot.msg
+    usage: /msgtoggle
 
 permissions:
   telegramconsolebot.admin:
@@ -65,6 +94,7 @@ permissions:
       telegramconsolebot.dupeip: true
       telegramconsolebot.seen: true
       telegramconsolebot.pex: true
+      telegramconsolebot.msg: true
   
   telegramconsolebot.ban:
     description: Ban permission
@@ -93,3 +123,6 @@ permissions:
   telegramconsolebot.pex:
     description: PEX command
     default: op
+  telegramconsolebot.msg:
+    description: Private messages
+    default: true
