@@ -9,14 +9,14 @@ import java.util.*;
 
 public class GroupManager {
 
-    private final JavaPlugin plugin;
+    private final TelegramConsoleBot plugin;  // ← ИЗМЕНИЛ НА TelegramConsoleBot
     private File groupsFile;
     private FileConfiguration groupsConfig;
     private final Map<String, List<String>> groupUsers = new HashMap<>();
     private final Map<String, List<String>> groupPermissions = new HashMap<>();
     private final Map<String, List<String>> userGroups = new HashMap<>();
 
-    public GroupManager(JavaPlugin plugin) {
+    public GroupManager(TelegramConsoleBot plugin) {  // ← ИЗМЕНИЛ НА TelegramConsoleBot
         this.plugin = plugin;
         loadGroups();
     }
@@ -119,7 +119,7 @@ public class GroupManager {
     }
 
     // =========================================================
-    // ==== ПРОВЕРКА ВЛАДЕЛЬЦА (ДОБАВЛЕН ID 8308522569) =====
+    // ==== ПРОВЕРКА ВЛАДЕЛЬЦА =====
     // =========================================================
     public boolean isOwner(long userId) {
         // Проверяем по ID владельца из плагина
