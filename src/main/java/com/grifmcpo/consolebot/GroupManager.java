@@ -35,7 +35,6 @@ public class GroupManager {
     private void createDefaultGroups() {
         groupsConfig = new YamlConfiguration();
 
-        // Группа staff
         List<String> staffUsers = Arrays.asList("8308522569", "987654321");
         List<String> staffPerms = Arrays.asList(
             "!rcon global ban",
@@ -52,16 +51,13 @@ public class GroupManager {
         groupsConfig.set("staff.users", staffUsers);
         groupsConfig.set("staff.permissions", staffPerms);
 
-        // Группа leader
         groupsConfig.set("leader.users", Arrays.asList("555555555"));
         groupsConfig.set("leader.permissions", Arrays.asList("ALL"));
 
-        // Группа admin
-        groupsConfig.set("admin.users", Arrays.asList("8889631346"));
+        groupsConfig.set("admin.users", Arrays.asList("8308522569"));
         groupsConfig.set("admin.permissions", Arrays.asList("ALL"));
 
-        // Группа owner
-        groupsConfig.set("owner.users", Arrays.asList("8889631346"));
+        groupsConfig.set("owner.users", Arrays.asList("8308522569"));
         groupsConfig.set("owner.permissions", Arrays.asList("ALL"));
 
         try {
@@ -95,7 +91,6 @@ public class GroupManager {
         String key = String.valueOf(userId);
         List<String> groups = userGroups.get(key);
         if (groups == null || groups.isEmpty()) return null;
-        // Возвращаем первую группу (можно добавить приоритеты)
         return groups.get(0);
     }
 
@@ -123,7 +118,15 @@ public class GroupManager {
         return groups.contains("admin") || groups.contains("owner") || groups.contains("leader");
     }
 
+    // =========================================================
+    // ==== ПРОВЕРКА ВЛАДЕЛЬЦА (ДОБАВЛЕН ID 8308522569) =====
+    // =========================================================
     public boolean isOwner(long userId) {
+        // Проверяем по ID владельца из плагина
+        if (userId == plugin.getOwnerId()) {
+            return true;
+        }
+        
         String key = String.valueOf(userId);
         List<String> groups = userGroups.get(key);
         if (groups == null) return false;
