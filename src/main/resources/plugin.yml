@@ -79,6 +79,10 @@ commands:
     description: Toggle private messages
     permission: telegramconsolebot.msg
     usage: /msgtoggle
+  report:
+    description: Report a player
+    permission: telegramconsolebot.report
+    usage: /report <player> <reason>
 
 permissions:
   telegramconsolebot.admin:
@@ -95,6 +99,7 @@ permissions:
       telegramconsolebot.seen: true
       telegramconsolebot.pex: true
       telegramconsolebot.msg: true
+      telegramconsolebot.report: true
   
   telegramconsolebot.ban:
     description: Ban permission
@@ -125,4 +130,7 @@ permissions:
     default: op
   telegramconsolebot.msg:
     description: Private messages
+    default: true
+  telegramconsolebot.report:
+    description: Report permission
     default: true
