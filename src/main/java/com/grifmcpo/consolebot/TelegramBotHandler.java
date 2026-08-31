@@ -290,6 +290,9 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 "!rcon global pex user <ник> - информация о игроке\n" +
                 "!rcon global pex group - список групп\n" +
                 "!rcon global console <текст> - отправить в консоль\n" +
+                "!rcon global msg <ник> <текст> - отправить ЛС игроку\n" +
+                "!rcon global t <ник> <текст> - отправить ЛС (сокращ.)\n" +
+                "!rcon global tell <ник> <текст> - отправить ЛС (полная)\n" +
                 "!rcon global tex on <причина> [время] - включить тех. работы\n" +
                 "!rcon global tex off - выключить тех. работы\n" +
                 "!rcon global tex auto <время> <причина> - авто-включение\n" +
@@ -384,6 +387,11 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 break;
             case "console":
                 handleConsole(chatId, cmd, userId);
+                break;
+            case "msg":
+            case "t":
+            case "tell":
+                handlePrivateMessage(chatId, cmd, userId);
                 break;
             case "tex":
                 handleTechWorks(chatId, cmd, userId);
@@ -1042,6 +1050,37 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         plugin.getLogger().info("[Console] " + text + " (От: " + sender + ")");
 
         sendMessage(chatId, "[БОТ] Ответ от сервера:\nКоманда отправлена в консоль: " + text);
+    }
+
+    // =========================================================
+    // ==== ЛИЧНЫЕ СООБЩЕНИЯ ИЗ БОТА =====
+    // =========================================================
+    private void handlePrivateMessage(long chatId, String cmd, long userId) {
+        String[] parts = cmd.split(" ");
+        if (parts.length < 3) {
+            sendMessage(chatId, "[БОТ] Использование: !rcon global msg <ник> <сообщение>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global t <ник> <сообщение>");
+            sendMessage(chatId, "[БОТ] Использование: !rcon global tell <ник> <сообщение>");
+            return;
+        }
+
+        String targetName = parts[1];
+        String message = String.join(" ", Arrays.copyOfRange(parts, 2, parts.length));
+        
+        String sender = plugin.getCustomSender(userId);
+        if (sender == null) sender = "RCON@" + userId;
+
+        boolean success = plugin.getPrivateMessageManager().sendFromBot(sender, targetName, message);
+        if (success) {
+            sendMessage(chatId, "[БОТ] ✅ Сообщение отправлено игроку " + targetName + ": " + message);
+        } else {
+            Player target = Bukkit.getPlayer(targetName);
+            if (target == null) {
+                sendMessage(chatId, "[БОТ] ❌ Игрок " + targetName + " не найден!");
+            } else {
+                sendMessage(chatId, "[БОТ] ❌ Игрок " + targetName + " отключил личные сообщения!");
+            }
+        }
     }
 
     // =========================================================
