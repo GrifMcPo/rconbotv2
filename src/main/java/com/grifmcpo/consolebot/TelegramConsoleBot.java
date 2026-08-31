@@ -78,6 +78,21 @@ public class TelegramConsoleBot extends JavaPlugin {
             getLogger().warning("Некоторые команды не найдены в plugin.yml");
         }
 
+        // ===== РЕГИСТРАЦИЯ КОМАНД ЛС =====
+        PrivateMessageCommands pmCommands = new PrivateMessageCommands(privateMessageManager);
+        try {
+            getCommand("msg").setExecutor(pmCommands);
+            getCommand("tell").setExecutor(pmCommands);
+            getCommand("t").setExecutor(pmCommands);
+            getCommand("r").setExecutor(pmCommands);
+            getCommand("reply").setExecutor(pmCommands);
+            getCommand("togglemsg").setExecutor(pmCommands);
+            getCommand("msgtoggle").setExecutor(pmCommands);
+            getLogger().info("✅ Команды ЛС зарегистрированы!");
+        } catch (NullPointerException e) {
+            getLogger().warning("Некоторые команды ЛС не найдены в plugin.yml");
+        }
+
         // ===== РЕГИСТРАЦИЯ TELEGRAM БОТА =====
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
