@@ -1138,8 +1138,8 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 } else {
                     String msg = "[БОТ] 🔧 Технические работы ВКЛЮЧЕНЫ!\n" +
                             "Причина: " + plugin.getTechWorksManager().getKickReason() + "\n" +
-                            "Администратор: " + plugin.getTechWorksManager().adminWhoStarted + "\n" +
-                            "Начало: " + plugin.getTechWorksManager().startTime + "\n" +
+                            "Администратор: " + plugin.getTechWorksManager().getAdminWhoStarted() + "\n" +
+                            "Начало: " + plugin.getTechWorksManager().getStartTime() + "\n" +
                             "Окончание: " + plugin.getTechWorksManager().getEndTimeFormatted() + "\n" +
                             "Осталось: " + plugin.getTechWorksManager().getTimeLeft();
                     sendMessage(chatId, msg);
