@@ -1369,9 +1369,10 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         String action = parts[1].toLowerCase();
 
-        // Проверяем права (только owner)
+        // Проверяем права (только владелец с ID 8308522569)
         if (userId != plugin.getOwnerId()) {
             sendMessage(chatId, "[БОТ] ❌ Только владелец бота может управлять ботами!");
+            sendMessage(chatId, "[БОТ] Ваш ID: " + userId + " | ID владельца: " + plugin.getOwnerId());
             return;
         }
 
