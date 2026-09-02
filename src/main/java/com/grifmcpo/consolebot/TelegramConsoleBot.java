@@ -14,7 +14,7 @@ import java.util.Map;
 public class TelegramConsoleBot extends JavaPlugin {
 
     private Map<String, String> admins = new HashMap<>();
-    private long ownerId = 8308522569L;  // ← ТВОЙ ID
+    private long ownerId = 8308522569L;
     private File adminsFile;
     
     private PlayerManager playerManager;
@@ -29,6 +29,7 @@ public class TelegramConsoleBot extends JavaPlugin {
     private PrivateMessageManager privateMessageManager;
     private ReportManager reportManager;
     private BotManager botManager;
+    private SupabaseManager supabaseManager;
     private TelegramBotHandler botHandler;
 
     @Override
@@ -41,6 +42,14 @@ public class TelegramConsoleBot extends JavaPlugin {
             getLogger().severe("Токен не найден в config.yml!");
             getServer().getPluginManager().disablePlugin(this);
             return;
+        }
+
+        // ===== ИНИЦИАЛИЗАЦИЯ SUPABASE =====
+        supabaseManager = new SupabaseManager(this);
+        if (supabaseManager == null) {
+            getLogger().severe("❌ Не удалось инициализировать Supabase!");
+        } else {
+            getLogger().info("✅ Supabase инициализирован!");
         }
 
         loadAdmins();
@@ -145,7 +154,6 @@ public class TelegramConsoleBot extends JavaPlugin {
                 getLogger().warning("Ошибка загрузки admins.yml: " + e.getMessage());
             }
         }
-        // Добавляем владельца в админы автоматически
         admins.put(String.valueOf(ownerId), "Owner");
         getLogger().info("Загружено администраторов: " + admins.size());
     }
@@ -197,5 +205,6 @@ public class TelegramConsoleBot extends JavaPlugin {
     public PrivateMessageManager getPrivateMessageManager() { return privateMessageManager; }
     public ReportManager getReportManager() { return reportManager; }
     public BotManager getBotManager() { return botManager; }
+    public SupabaseManager getSupabaseManager() { return supabaseManager; }
     public TelegramBotHandler getBotHandler() { return botHandler; }
 }
