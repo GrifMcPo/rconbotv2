@@ -44,7 +44,6 @@ public class TelegramConsoleBot extends JavaPlugin {
             return;
         }
 
-        // ===== ИНИЦИАЛИЗАЦИЯ SUPABASE =====
         supabaseManager = new SupabaseManager(this);
         if (supabaseManager == null) {
             getLogger().severe("❌ Не удалось инициализировать Supabase!");
@@ -154,7 +153,10 @@ public class TelegramConsoleBot extends JavaPlugin {
                 getLogger().warning("Ошибка загрузки admins.yml: " + e.getMessage());
             }
         }
-        admins.put(String.valueOf(ownerId), "Owner");
+        // Если владелец не добавлен в admins.yml - добавляем
+        if (!admins.containsKey(String.valueOf(ownerId))) {
+            admins.put(String.valueOf(ownerId), "Owner");
+        }
         getLogger().info("Загружено администраторов: " + admins.size());
     }
 
@@ -190,10 +192,23 @@ public class TelegramConsoleBot extends JavaPlugin {
     public void addAdmin(String telegramId, String playerName) { admins.put(telegramId, playerName); saveAdmins(); }
     public void removeAdmin(String telegramId) { admins.remove(telegramId); saveAdmins(); }
     public boolean isAdmin(long telegramId) { return admins.containsKey(String.valueOf(telegramId)) || telegramId == ownerId; }
-    public String getCustomSender(long telegramId) { 
-        if (telegramId == ownerId) return "Owner";
-        return admins.get(String.valueOf(telegramId)); 
+    
+    // =========================================================
+    // ==== ИСПРАВЛЕННЫЙ getCustomSender =====
+    // =========================================================
+    public String getCustomSender(long telegramId) {
+        // Сначала проверяем admins.yml
+        String custom = admins.get(String.valueOf(telegramId));
+        if (custom != null && !custom.isEmpty()) {
+            return custom;
+        }
+        // Если нет в admins.yml, тогда Owner
+        if (telegramId == ownerId) {
+            return "Owner";
+        }
+        return "RCON@" + telegramId;
     }
+    
     public PlayerManager getPlayerManager() { return playerManager; }
     public CommandLogger getCommandLogger() { return commandLogger; }
     public CommandExecutor getCommandExecutor() { return commandExecutor; }
