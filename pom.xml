@@ -17,14 +17,19 @@
     </properties>
 
     <repositories>
+        <!-- PaperMC репозиторий -->
         <repository>
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
+        
+        <!-- JitPack для Vault -->
         <repository>
             <id>jitpack.io</id>
             <url>https://jitpack.io</url>
         </repository>
+
+        <!-- Central для всех основных зависимостей -->
         <repository>
             <id>central</id>
             <url>https://repo1.maven.org/maven2/</url>
@@ -32,7 +37,7 @@
     </repositories>
 
     <dependencies>
-        <!-- Paper API -->
+        <!-- ===== БУКИТ / PAPER API ===== -->
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
@@ -40,7 +45,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Telegram Bots API -->
+        <!-- ===== TELEGRAM BOTS API ===== -->
         <dependency>
             <groupId>org.telegram</groupId>
             <artifactId>telegrambots</artifactId>
@@ -53,12 +58,43 @@
             </exclusions>
         </dependency>
 
-        <!-- Vault API -->
+        <!-- ===== VAULT API ===== -->
         <dependency>
             <groupId>com.github.MilkBowl</groupId>
             <artifactId>VaultAPI</artifactId>
             <version>1.7</version>
             <scope>provided</scope>
+        </dependency>
+
+        <!-- ===== LUCKPERMS API ===== -->
+        <dependency>
+            <groupId>net.luckperms</groupId>
+            <artifactId>luckperms-api</artifactId>
+            <version>5.4</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ===== JSON (GSON) ДЛЯ SUPABASE ===== -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.10.1</version>
+        </dependency>
+
+        <!-- ===== ЛОГГИРОВАНИЕ ===== -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.9</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ===== ТЕСТИРОВАНИЕ (ОПЦИОНАЛЬНО) ===== -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.1</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -78,6 +114,7 @@
         </resources>
         
         <plugins>
+            <!-- ===== КОМПИЛЯТОР ===== -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -89,6 +126,7 @@
                 </configuration>
             </plugin>
 
+            <!-- ===== СБОРКА С ЗАВИСИМОСТЯМИ (SHADE) ===== -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -104,15 +142,21 @@
                             <minimizeJar>false</minimizeJar>
                             <artifactSet>
                                 <includes>
+                                    <!-- Telegram -->
                                     <include>org.telegram:telegrambots</include>
                                     <include>org.telegram:telegrambots-meta</include>
+                                    <!-- HTTP -->
                                     <include>org.apache.httpcomponents:*</include>
+                                    <!-- Jackson (JSON) -->
                                     <include>com.fasterxml.jackson.core:*</include>
+                                    <!-- Jersey -->
                                     <include>org.glassfish.jersey:*</include>
                                     <include>jakarta.ws.rs:*</include>
                                     <include>jakarta.annotation:*</include>
                                     <include>org.glassfish.hk2:*</include>
                                     <include>org.javassist:*</include>
+                                    <!-- GSON для Supabase -->
+                                    <include>com.google.code.gson:gson</include>
                                 </includes>
                             </artifactSet>
                             <filters>
@@ -131,10 +175,24 @@
                                     <pattern>org.telegram</pattern>
                                     <shadedPattern>com.grifmcpo.shaded.telegram</shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>com.google.gson</pattern>
+                                    <shadedPattern>com.grifmcpo.shaded.gson</shadedPattern>
+                                </relocation>
                             </relocations>
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+
+            <!-- ===== РЕСУРСЫ ===== -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <configuration>
+                    <encoding>UTF-8</encoding>
+                </configuration>
             </plugin>
         </plugins>
     </build>
