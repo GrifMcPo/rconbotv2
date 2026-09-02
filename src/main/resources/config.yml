@@ -1,6 +1,26 @@
 # Токен твоего бота от @BotFather
 telegram-token: "8537681569:AAFnXd0A9B_EWmDVPi-h7VMQmKCRCGdEN2A"
+# =========================================================
+# SUPABASE НАСТРОЙКИ
+# =========================================================
+supabase:
+  # URL твоего проекта Supabase
+  url: "https://Server Oblaco.supabase.co"
+  # Service Role Key (из Settings -> API)
+  service_role_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impuem1nYW92bmZkbXNobm5ieGloIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODM2OTAwNCwiZXhwIjoyMTAzOTQ1MDA0fQ.FjGoAIa9bVo0whCdsjMdKc3aX1rmi3BWlvfFoF8E22w"
+  # Anon Key (из Settings -> API)
+  anon_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impuem1nYW92bmZkbXNobm5ieGloIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNjkwMDQsImV4cCI6MjEwMzk0NTAwNH0.Wx4V_nEhm_yt_6klGgT13ok-01J3lRfNPukJ0NS18ss"
 
+# =========================================================
+# БЕЗОПАСНОСТЬ
+# =========================================================
+security:
+  # Соль для шифрования
+  encryption_salt: "GrifMcPoSalt2024!"
+  # Время жизни сессии (в минутах)
+  session_timeout: 60
+  # Максимальное количество попыток входа
+  max_login_attempts: 5
 # Настройки RCON
 rcon:
   host: "127.0.0.1"
