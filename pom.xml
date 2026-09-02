@@ -66,14 +66,6 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- ===== LUCKPERMS API ===== -->
-        <dependency>
-            <groupId>net.luckperms</groupId>
-            <artifactId>luckperms-api</artifactId>
-            <version>5.4</version>
-            <scope>provided</scope>
-        </dependency>
-
         <!-- ===== JSON (GSON) ДЛЯ SUPABASE ===== -->
         <dependency>
             <groupId>com.google.code.gson</groupId>
@@ -87,14 +79,6 @@
             <artifactId>slf4j-api</artifactId>
             <version>2.0.9</version>
             <scope>provided</scope>
-        </dependency>
-
-        <!-- ===== ТЕСТИРОВАНИЕ (ОПЦИОНАЛЬНО) ===== -->
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>5.10.1</version>
-            <scope>test</scope>
         </dependency>
     </dependencies>
 
