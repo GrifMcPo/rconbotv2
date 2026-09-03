@@ -36,8 +36,6 @@ public class SupabaseManager {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 String fullUrl = supabaseUrl + "/rest/v1/" + endpoint;
-                plugin.getLogger().info("📡 Запрос: " + method + " " + fullUrl);
-                
                 URL url = new URL(fullUrl);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod(method);
@@ -49,7 +47,6 @@ public class SupabaseManager {
                 
                 if (body != null && !body.isEmpty()) {
                     conn.setDoOutput(true);
-                    plugin.getLogger().info("📤 Body: " + body);
                     try (OutputStream os = conn.getOutputStream()) {
                         os.write(body.getBytes(StandardCharsets.UTF_8));
                     }
@@ -57,9 +54,7 @@ public class SupabaseManager {
                 
                 int responseCode = conn.getResponseCode();
                 if (responseCode >= 200 && responseCode < 300) {
-                    String response = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    plugin.getLogger().info("✅ Ответ: " + responseCode);
-                    return response;
+                    return new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
                 } else {
                     String error = new String(conn.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
                     plugin.getLogger().warning("❌ Supabase ошибка: " + responseCode + " - " + error);
@@ -103,6 +98,20 @@ public class SupabaseManager {
                     JsonArray arr = JsonParser.parseString(response).getAsJsonArray();
                     if (arr.isEmpty()) return null;
                     return arr.get(0).getAsJsonObject().get("uuid").getAsString();
+                } catch (Exception e) {
+                    return null;
+                }
+            });
+    }
+
+    public CompletableFuture<String> getPlayerNameByUuid(String uuid) {
+        return sendRequest("players?uuid=eq." + uuid, "GET", null)
+            .thenApplyAsync(response -> {
+                if (response == null || response.isEmpty()) return null;
+                try {
+                    JsonArray arr = JsonParser.parseString(response).getAsJsonArray();
+                    if (arr.isEmpty()) return null;
+                    return arr.get(0).getAsJsonObject().get("player_name").getAsString();
                 } catch (Exception e) {
                     return null;
                 }
@@ -173,90 +182,86 @@ public class SupabaseManager {
     // ==== ПОЛУЧЕНИЕ НАКАЗАНИЙ (ИСПРАВЛЕНО) =====
     // =========================================================
     
-    // Активные баны
     public CompletableFuture<List<Map<String, Object>>> getActiveBans() {
         long now = System.currentTimeMillis();
-        // ИСПРАВЛЕНО: убрал OR, использую отдельные запросы
-        String endpoint = "punishments?type=eq.ban&active=eq.true&expiry=eq.-1";
+        String endpoint = "punishments?type=eq.ban&active=eq.true&order=timestamp.desc";
         return sendRequest(endpoint, "GET", null)
             .thenApplyAsync(response -> {
                 List<Map<String, Object>> result = parsePunishments(response);
-                // Дополнительно получаем временные баны
+                result.removeIf(p -> {
+                    long expiry = (Long) p.get("expiry");
+                    return expiry != -1 && expiry <= System.currentTimeMillis();
+                });
                 return result;
             });
     }
 
-    // Активные муты
     public CompletableFuture<List<Map<String, Object>>> getActiveMutes() {
         long now = System.currentTimeMillis();
-        String endpoint = "punishments?type=eq.mute&active=eq.true&expiry=eq.-1";
+        String endpoint = "punishments?type=eq.mute&active=eq.true&order=timestamp.desc";
         return sendRequest(endpoint, "GET", null)
-            .thenApplyAsync(response -> parsePunishments(response));
-    }
-
-    // Активный бан игрока
-    public CompletableFuture<Map<String, Object>> getActiveBan(String playerUuid) {
-        long now = System.currentTimeMillis();
-        // Сначала ищем вечные баны
-        String endpoint = "punishments?player_uuid=eq." + playerUuid + 
-                          "&type=eq.ban&active=eq.true&expiry=eq.-1&limit=1&order=timestamp.desc";
-        return sendRequest(endpoint, "GET", null)
-            .thenComposeAsync(response -> {
-                List<Map<String, Object>> bans = parsePunishments(response);
-                if (!bans.isEmpty()) {
-                    return CompletableFuture.completedFuture(bans.get(0));
-                }
-                // Если нет вечных, ищем временные
-                long now2 = System.currentTimeMillis();
-                String endpoint2 = "punishments?player_uuid=eq." + playerUuid + 
-                                   "&type=eq.ban&active=eq.true&expiry=gt." + now2 + 
-                                   "&limit=1&order=timestamp.desc";
-                return sendRequest(endpoint2, "GET", null)
-                    .thenApplyAsync(response2 -> {
-                        List<Map<String, Object>> bans2 = parsePunishments(response2);
-                        return bans2.isEmpty() ? null : bans2.get(0);
-                    });
+            .thenApplyAsync(response -> {
+                List<Map<String, Object>> result = parsePunishments(response);
+                result.removeIf(p -> {
+                    long expiry = (Long) p.get("expiry");
+                    return expiry != -1 && expiry <= System.currentTimeMillis();
+                });
+                return result;
             });
     }
 
-    // Активный мут игрока
+    public CompletableFuture<Map<String, Object>> getActiveBan(String playerUuid) {
+        long now = System.currentTimeMillis();
+        String endpoint = "punishments?player_uuid=eq." + playerUuid + 
+                          "&type=eq.ban&active=eq.true&limit=1&order=timestamp.desc";
+        return sendRequest(endpoint, "GET", null)
+            .thenApplyAsync(response -> {
+                List<Map<String, Object>> list = parsePunishments(response);
+                if (list.isEmpty()) return null;
+                Map<String, Object> ban = list.get(0);
+                long expiry = (Long) ban.get("expiry");
+                if (expiry != -1 && expiry <= System.currentTimeMillis()) {
+                    return null;
+                }
+                return ban;
+            });
+    }
+
     public CompletableFuture<Map<String, Object>> getActiveMute(String playerUuid) {
         long now = System.currentTimeMillis();
         String endpoint = "punishments?player_uuid=eq." + playerUuid + 
-                          "&type=eq.mute&active=eq.true&expiry=eq.-1&limit=1&order=timestamp.desc";
+                          "&type=eq.mute&active=eq.true&limit=1&order=timestamp.desc";
         return sendRequest(endpoint, "GET", null)
-            .thenComposeAsync(response -> {
-                List<Map<String, Object>> mutes = parsePunishments(response);
-                if (!mutes.isEmpty()) {
-                    return CompletableFuture.completedFuture(mutes.get(0));
+            .thenApplyAsync(response -> {
+                List<Map<String, Object>> list = parsePunishments(response);
+                if (list.isEmpty()) return null;
+                Map<String, Object> mute = list.get(0);
+                long expiry = (Long) mute.get("expiry");
+                if (expiry != -1 && expiry <= System.currentTimeMillis()) {
+                    return null;
                 }
-                long now2 = System.currentTimeMillis();
-                String endpoint2 = "punishments?player_uuid=eq." + playerUuid + 
-                                   "&type=eq.mute&active=eq.true&expiry=gt." + now2 + 
-                                   "&limit=1&order=timestamp.desc";
-                return sendRequest(endpoint2, "GET", null)
-                    .thenApplyAsync(response2 -> {
-                        List<Map<String, Object>> mutes2 = parsePunishments(response2);
-                        return mutes2.isEmpty() ? null : mutes2.get(0);
-                    });
+                return mute;
             });
     }
 
-    // История наказаний игрока
+    // =========================================================
+    // ==== ИСТОРИЯ =====
+    // =========================================================
     public CompletableFuture<List<Map<String, Object>>> getPunishmentHistory(String playerUuid, int limit) {
         String endpoint = "punishments?player_uuid=eq." + playerUuid + "&order=timestamp.desc&limit=" + limit;
         return sendRequest(endpoint, "GET", null)
             .thenApplyAsync(response -> parsePunishments(response));
     }
 
-    // Наказания выданные игроком
     public CompletableFuture<List<Map<String, Object>>> getIssuerHistory(String issuerUuid, int limit) {
         String endpoint = "punishments?issuer_uuid=eq." + issuerUuid + "&order=timestamp.desc&limit=" + limit;
         return sendRequest(endpoint, "GET", null)
             .thenApplyAsync(response -> parsePunishments(response));
     }
 
-    // Парсинг наказаний
+    // =========================================================
+    // ==== ПАРСИНГ =====
+    // =========================================================
     private List<Map<String, Object>> parsePunishments(String response) {
         List<Map<String, Object>> result = new ArrayList<>();
         if (response == null || response.isEmpty()) return result;
