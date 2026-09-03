@@ -10,13 +10,12 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
-import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 public class PunishmentManager implements Listener {
 
@@ -25,7 +24,6 @@ public class PunishmentManager implements Listener {
     private final SupabaseManager supabase;
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
 
-    // Кэш для активных наказаний (для быстрой проверки)
     private final Map<String, Long> bans = new ConcurrentHashMap<>();
     private final Map<String, Long> mutes = new ConcurrentHashMap<>();
     private final Map<String, String> muteIssuers = new ConcurrentHashMap<>();
@@ -47,9 +45,6 @@ public class PunishmentManager implements Listener {
         plugin.getLogger().info("✅ PunishmentManager загружен с Supabase!");
     }
 
-    // =========================================================
-    // ==== ЗАГРУЗКА АКТИВНЫХ НАКАЗАНИЙ =====
-    // =========================================================
     private void loadActivePunishments() {
         bans.clear();
         mutes.clear();
@@ -353,9 +348,6 @@ public class PunishmentManager implements Listener {
         return banPlayer(playerName, issuer, reason, duration, false, true);
     }
 
-    // =========================================================
-    // ==== БАН ПО UUID =====
-    // =========================================================
     public boolean banUuid(String uuid, String issuer, String reason, String duration, boolean hidden, boolean broadcast) {
         try {
             UUID.fromString(uuid);
@@ -367,9 +359,6 @@ public class PunishmentManager implements Listener {
         }
     }
 
-    // =========================================================
-    // ==== РАЗБАН =====
-    // =========================================================
     public boolean unbanPlayer(String playerName, String issuer, String reason, boolean broadcast) {
         if (!isBanned(playerName)) {
             return false;
@@ -487,9 +476,6 @@ public class PunishmentManager implements Listener {
         return mutePlayer(playerName, issuer, reason, duration, false, true);
     }
 
-    // =========================================================
-    // ==== РАЗМУТ =====
-    // =========================================================
     public boolean unmutePlayer(String playerName, String issuer, String reason, boolean broadcast) {
         if (!isMuted(playerName)) {
             return false;
@@ -767,7 +753,7 @@ public class PunishmentManager implements Listener {
     }
 
     // =========================================================
-    // ==== GETTERS ДЛЯ TELEGRAMBOTHANDLER =====
+    // ==== GETTERS =====
     // =========================================================
 
     public boolean isBanned(String playerName) {
@@ -876,7 +862,7 @@ public class PunishmentManager implements Listener {
     }
 
     // =========================================================
-    // ==== HIST / SHIST =====
+    // ==== HIST / SHIST / LASTBAN / LASTMUTE =====
     // =========================================================
     public List<Map<String, Object>> getHistory(String playerName) {
         try {
@@ -915,76 +901,6 @@ public class PunishmentManager implements Listener {
             }
         } catch (Exception e) {}
         return null;
-    }
-
-    // =========================================================
-    // ==== SEEN =====
-    // =========================================================
-    public String getSeenInfo(String playerName, boolean isOnline) {
-        StringBuilder sb = new StringBuilder();
-        
-        try {
-            String uuid = supabase.getPlayerUuidByName(playerName).get();
-            if (uuid == null) {
-                return "§cИгрок " + playerName + " не найден в базе данных!";
-            }
-
-            if (isOnline) {
-                Player player = Bukkit.getPlayer(playerName);
-                if (player != null) {
-                    long joinTime = playerJoinTimes.getOrDefault(playerName, System.currentTimeMillis());
-                    long onlineTime = System.currentTimeMillis() - joinTime;
-                    String timeStr = formatTime(onlineTime);
-                    sb.append("§6Игрок §c").append(playerName).append(" §aонлайн §6в течение §c").append(timeStr).append("\n");
-                    sb.append(" §6- §6UUID: §f").append(uuid);
-                }
-            } else {
-                long offlineTime = System.currentTimeMillis() - playerJoinTimes.getOrDefault(playerName, System.currentTimeMillis());
-                String timeStr = formatTime(offlineTime);
-                boolean isWhitelisted = isPlayerWhitelisted(playerName);
-                
-                sb.append("§6Игрок §c").append(playerName).append(" §4офлайн §6в течение §c").append(timeStr).append("\n");
-                sb.append(" §6- §6UUID: §f").append(uuid).append("\n");
-                sb.append(" §6- §6В белом списке: ").append(isWhitelisted ? "§aправда" : "§4ложь").append("\n");
-                sb.append(" §6- §6Местоположение: §fнеизвестно");
-            }
-        } catch (Exception e) {
-            plugin.getLogger().severe("Ошибка получения seen: " + e.getMessage());
-            return "§cОшибка получения информации!";
-        }
-        
-        return sb.toString();
-    }
-
-    private boolean isPlayerWhitelisted(String playerName) {
-        try {
-            File whitelist = new File("whitelist.json");
-            if (whitelist.exists()) {
-                String content = new String(java.nio.file.Files.readAllBytes(whitelist.toPath()));
-                return content.contains("\"name\":\"" + playerName + "\"");
-            }
-        } catch (Exception e) {}
-        return false;
-    }
-
-    private String formatTime(long millis) {
-        long seconds = millis / 1000;
-        long minutes = seconds / 60;
-        long hours = minutes / 60;
-        long days = hours / 24;
-        
-        seconds %= 60;
-        minutes %= 60;
-        hours %= 24;
-        
-        StringBuilder sb = new StringBuilder();
-        if (days > 0) sb.append(days).append("д ");
-        if (hours > 0) sb.append(hours).append("ч ");
-        if (minutes > 0 && hours == 0) sb.append(minutes).append("м ");
-        if (seconds > 0 && minutes == 0 && hours == 0) sb.append(seconds).append("с");
-        
-        if (sb.length() == 0) return "только что";
-        return sb.toString().trim();
     }
 
     public String getFormattedHistory(String playerName, int limit) {
@@ -1115,6 +1031,73 @@ public class PunishmentManager implements Listener {
             plugin.getLogger().severe("Ошибка получения shist: " + e.getMessage());
             return "[БОТ] Ошибка получения shist!";
         }
+    }
+
+    public String getSeenInfo(String playerName, boolean isOnline) {
+        StringBuilder sb = new StringBuilder();
+        
+        try {
+            String uuid = supabase.getPlayerUuidByName(playerName).get();
+            if (uuid == null) {
+                return "§cИгрок " + playerName + " не найден в базе данных!";
+            }
+
+            if (isOnline) {
+                Player player = Bukkit.getPlayer(playerName);
+                if (player != null) {
+                    long joinTime = playerJoinTimes.getOrDefault(playerName, System.currentTimeMillis());
+                    long onlineTime = System.currentTimeMillis() - joinTime;
+                    String timeStr = formatTime(onlineTime);
+                    sb.append("§6Игрок §c").append(playerName).append(" §aонлайн §6в течение §c").append(timeStr).append("\n");
+                    sb.append(" §6- §6UUID: §f").append(uuid);
+                }
+            } else {
+                long offlineTime = System.currentTimeMillis() - playerJoinTimes.getOrDefault(playerName, System.currentTimeMillis());
+                String timeStr = formatTime(offlineTime);
+                boolean isWhitelisted = isPlayerWhitelisted(playerName);
+                
+                sb.append("§6Игрок §c").append(playerName).append(" §4офлайн §6в течение §c").append(timeStr).append("\n");
+                sb.append(" §6- §6UUID: §f").append(uuid).append("\n");
+                sb.append(" §6- §6В белом списке: ").append(isWhitelisted ? "§aправда" : "§4ложь").append("\n");
+                sb.append(" §6- §6Местоположение: §fнеизвестно");
+            }
+        } catch (Exception e) {
+            plugin.getLogger().severe("Ошибка получения seen: " + e.getMessage());
+            return "§cОшибка получения информации!";
+        }
+        
+        return sb.toString();
+    }
+
+    private boolean isPlayerWhitelisted(String playerName) {
+        try {
+            File whitelist = new File("whitelist.json");
+            if (whitelist.exists()) {
+                String content = new String(java.nio.file.Files.readAllBytes(whitelist.toPath()));
+                return content.contains("\"name\":\"" + playerName + "\"");
+            }
+        } catch (Exception e) {}
+        return false;
+    }
+
+    private String formatTime(long millis) {
+        long seconds = millis / 1000;
+        long minutes = seconds / 60;
+        long hours = minutes / 60;
+        long days = hours / 24;
+        
+        seconds %= 60;
+        minutes %= 60;
+        hours %= 24;
+        
+        StringBuilder sb = new StringBuilder();
+        if (days > 0) sb.append(days).append("д ");
+        if (hours > 0) sb.append(hours).append("ч ");
+        if (minutes > 0 && hours == 0) sb.append(minutes).append("м ");
+        if (seconds > 0 && minutes == 0 && hours == 0) sb.append(seconds).append("с");
+        
+        if (sb.length() == 0) return "только что";
+        return sb.toString().trim();
     }
 
     // =========================================================
