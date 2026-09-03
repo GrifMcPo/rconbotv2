@@ -903,6 +903,87 @@ public class PunishmentManager implements Listener {
         return null;
     }
 
+    // =========================================================
+    // ==== CHECKBAN / CHECKMUTE =====
+    // =========================================================
+    public String getFormattedCheckBan(String playerName) {
+        try {
+            String uuid = supabase.getPlayerUuidByName(playerName).get();
+            if (uuid == null) {
+                return "[БОТ] Ответ от сервера:\nИгрок " + playerName + " не найден в базе данных!";
+            }
+
+            Map<String, Object> ban = supabase.getActiveBan(uuid).get();
+            if (ban == null) {
+                return "[БОТ] Ответ от сервера:\nИгрок " + playerName + " не забанен.";
+            }
+
+            String issuer = (String) ban.get("issuer_name");
+            String reason = (String) ban.get("reason");
+            long expiry = (Long) ban.get("expiry");
+            long timestamp = (Long) ban.get("timestamp");
+            boolean hidden = (Boolean) ban.get("hidden");
+            boolean ipBan = ban.containsKey("ip") && ban.get("ip") != null;
+            boolean isPermanent = expiry == -1;
+
+            String expiryStr = isPermanent ? "навсегда" : formatTimeLeft(expiry);
+
+            String response = "[БОТ] Ответ от сервера:\n";
+            response += "----- " + playerName + " -----\n";
+            response += " Причина: " + reason + "\n";
+            response += " Время: " + getFormattedDateTime(timestamp) + "\n";
+            response += " Истекает: " + expiryStr + "\n";
+            response += " Сервер: выживание\n";
+            response += " Выдал: " + issuer + "\n";
+            response += " IP: " + (ipBan ? "да" : "нет") + ", скрыто: " + (hidden ? "да" : "нет") + ", навсегда: " + (isPermanent ? "да" : "нет");
+
+            return response;
+        } catch (Exception e) {
+            plugin.getLogger().severe("❌ Ошибка checkban: " + e.getMessage());
+            return "[БОТ] Ошибка получения информации!";
+        }
+    }
+
+    public String getFormattedCheckMute(String playerName) {
+        try {
+            String uuid = supabase.getPlayerUuidByName(playerName).get();
+            if (uuid == null) {
+                return "[БОТ] Ответ от сервера:\nИгрок " + playerName + " не найден в базе данных!";
+            }
+
+            Map<String, Object> mute = supabase.getActiveMute(uuid).get();
+            if (mute == null) {
+                return "[БОТ] Ответ от сервера:\nИгрок " + playerName + " не замучен.";
+            }
+
+            String issuer = (String) mute.get("issuer_name");
+            String reason = (String) mute.get("reason");
+            long expiry = (Long) mute.get("expiry");
+            long timestamp = (Long) mute.get("timestamp");
+            boolean hidden = (Boolean) mute.get("hidden");
+            boolean isPermanent = expiry == -1;
+
+            String expiryStr = isPermanent ? "навсегда" : formatTimeLeft(expiry);
+
+            String response = "[БОТ] Ответ от сервера:\n";
+            response += "----- " + playerName + " -----\n";
+            response += " Причина: " + reason + "\n";
+            response += " Время: " + getFormattedDateTime(timestamp) + "\n";
+            response += " Истекает: " + expiryStr + "\n";
+            response += " Сервер: выживание\n";
+            response += " Выдал: " + issuer + "\n";
+            response += " IP: нет, скрыто: " + (hidden ? "да" : "нет") + ", навсегда: " + (isPermanent ? "да" : "нет");
+
+            return response;
+        } catch (Exception e) {
+            plugin.getLogger().severe("❌ Ошибка checkmute: " + e.getMessage());
+            return "[БОТ] Ошибка получения информации!";
+        }
+    }
+
+    // =========================================================
+    // ==== HIST / SHIST ФОРМАТИРОВАННЫЕ =====
+    // =========================================================
     public String getFormattedHistory(String playerName, int limit) {
         try {
             String uuid = supabase.getPlayerUuidByName(playerName).get();
@@ -911,6 +992,7 @@ public class PunishmentManager implements Listener {
             }
 
             List<Map<String, Object>> punishments = supabase.getPunishmentHistory(uuid, limit).get();
+
             if (punishments.isEmpty()) {
                 return "[БОТ] Ответ от сервера:\nНет наказаний для " + playerName;
             }
@@ -963,7 +1045,7 @@ public class PunishmentManager implements Listener {
 
             return sb.toString();
         } catch (Exception e) {
-            plugin.getLogger().severe("Ошибка получения истории: " + e.getMessage());
+            plugin.getLogger().severe("❌ Ошибка получения истории: " + e.getMessage());
             return "[БОТ] Ошибка получения истории!";
         }
     }
@@ -1028,7 +1110,7 @@ public class PunishmentManager implements Listener {
 
             return sb.toString();
         } catch (Exception e) {
-            plugin.getLogger().severe("Ошибка получения shist: " + e.getMessage());
+            plugin.getLogger().severe("❌ Ошибка получения shist: " + e.getMessage());
             return "[БОТ] Ошибка получения shist!";
         }
     }
