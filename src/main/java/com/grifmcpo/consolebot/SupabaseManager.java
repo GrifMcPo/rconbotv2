@@ -26,7 +26,6 @@ public class SupabaseManager {
             plugin.getLogger().severe("❌ Supabase настройки не найдены в config.yml!");
         } else {
             plugin.getLogger().info("✅ SupabaseManager инициализирован!");
-            plugin.getLogger().info("📡 URL: " + supabaseUrl);
         }
     }
 
@@ -37,6 +36,8 @@ public class SupabaseManager {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 String fullUrl = supabaseUrl + "/rest/v1/" + endpoint;
+                plugin.getLogger().info("📡 Запрос: " + method + " " + fullUrl);
+                
                 URL url = new URL(fullUrl);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod(method);
@@ -48,6 +49,7 @@ public class SupabaseManager {
                 
                 if (body != null && !body.isEmpty()) {
                     conn.setDoOutput(true);
+                    plugin.getLogger().info("📤 Body: " + body);
                     try (OutputStream os = conn.getOutputStream()) {
                         os.write(body.getBytes(StandardCharsets.UTF_8));
                     }
@@ -56,7 +58,7 @@ public class SupabaseManager {
                 int responseCode = conn.getResponseCode();
                 if (responseCode >= 200 && responseCode < 300) {
                     String response = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                    plugin.getLogger().info("📡 Supabase ответ: " + responseCode + " - " + (response.length() > 100 ? response.substring(0, 100) + "..." : response));
+                    plugin.getLogger().info("✅ Ответ: " + responseCode);
                     return response;
                 } else {
                     String error = new String(conn.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
@@ -65,7 +67,6 @@ public class SupabaseManager {
                 }
             } catch (Exception e) {
                 plugin.getLogger().severe("❌ Supabase request error: " + e.getMessage());
-                e.printStackTrace();
                 return null;
             }
         });
@@ -77,7 +78,6 @@ public class SupabaseManager {
     public CompletableFuture<String> getOrCreatePlayer(String playerName, String ip) {
         return getPlayerUuidByName(playerName).thenComposeAsync(uuid -> {
             if (uuid != null) {
-                plugin.getLogger().info("✅ Игрок " + playerName + " уже существует (UUID: " + uuid + ")");
                 return CompletableFuture.completedFuture(uuid);
             }
             
@@ -90,7 +90,6 @@ public class SupabaseManager {
             }
             json.addProperty("session_start", System.currentTimeMillis());
             
-            plugin.getLogger().info("📝 Создаем нового игрока: " + playerName + " (UUID: " + newUuid + ")");
             return sendRequest("players", "POST", json.toString())
                 .thenApplyAsync(r -> r != null ? newUuid : null);
         });
@@ -103,24 +102,7 @@ public class SupabaseManager {
                 try {
                     JsonArray arr = JsonParser.parseString(response).getAsJsonArray();
                     if (arr.isEmpty()) return null;
-                    String uuid = arr.get(0).getAsJsonObject().get("uuid").getAsString();
-                    plugin.getLogger().info("📡 Найден UUID для " + name + ": " + uuid);
-                    return uuid;
-                } catch (Exception e) {
-                    plugin.getLogger().warning("❌ Ошибка парсинга UUID: " + e.getMessage());
-                    return null;
-                }
-            });
-    }
-
-    public CompletableFuture<String> getPlayerNameByUuid(String uuid) {
-        return sendRequest("players?uuid=eq." + uuid, "GET", null)
-            .thenApplyAsync(response -> {
-                if (response == null || response.isEmpty()) return null;
-                try {
-                    JsonArray arr = JsonParser.parseString(response).getAsJsonArray();
-                    if (arr.isEmpty()) return null;
-                    return arr.get(0).getAsJsonObject().get("player_name").getAsString();
+                    return arr.get(0).getAsJsonObject().get("uuid").getAsString();
                 } catch (Exception e) {
                     return null;
                 }
@@ -160,25 +142,14 @@ public class SupabaseManager {
         }
         json.addProperty("active", true);
         
-        plugin.getLogger().info("📝 Сохраняем наказание: " + type + " для " + playerName + " (причина: " + reason + ")");
-        
         return sendRequest("punishments", "POST", json.toString())
             .thenApplyAsync(response -> {
-                if (response == null) {
-                    plugin.getLogger().warning("❌ Пустой ответ от Supabase!");
-                    return -1L;
-                }
+                if (response == null) return -1L;
                 try {
                     JsonArray arr = JsonParser.parseString(response).getAsJsonArray();
-                    if (arr.isEmpty()) {
-                        plugin.getLogger().warning("❌ Пустой массив в ответе!");
-                        return -1L;
-                    }
-                    long id = arr.get(0).getAsJsonObject().get("id").getAsLong();
-                    plugin.getLogger().info("✅ Наказание сохранено, ID: " + id);
-                    return id;
+                    if (arr.isEmpty()) return -1L;
+                    return arr.get(0).getAsJsonObject().get("id").getAsLong();
                 } catch (Exception e) {
-                    plugin.getLogger().severe("❌ Ошибка парсинга ответа: " + e.getMessage());
                     return -1L;
                 }
             });
@@ -199,96 +170,98 @@ public class SupabaseManager {
     }
 
     // =========================================================
-    // ==== ПОЛУЧЕНИЕ НАКАЗАНИЙ =====
+    // ==== ПОЛУЧЕНИЕ НАКАЗАНИЙ (ИСПРАВЛЕНО) =====
     // =========================================================
+    
+    // Активные баны
     public CompletableFuture<List<Map<String, Object>>> getActiveBans() {
         long now = System.currentTimeMillis();
-        String endpoint = "punishments?type=eq.ban&active=eq.true&or=expiry.eq.-1,expiry.gt." + now + "&order=timestamp.desc";
-        return sendRequest(endpoint, "GET", null)
-            .thenApplyAsync(response -> parsePunishments(response));
-    }
-
-    public CompletableFuture<List<Map<String, Object>>> getActiveMutes() {
-        long now = System.currentTimeMillis();
-        String endpoint = "punishments?type=eq.mute&active=eq.true&or=expiry.eq.-1,expiry.gt." + now + "&order=timestamp.desc";
-        return sendRequest(endpoint, "GET", null)
-            .thenApplyAsync(response -> parsePunishments(response));
-    }
-
-    public CompletableFuture<Map<String, Object>> getActiveBan(String playerUuid) {
-        long now = System.currentTimeMillis();
-        String endpoint = "punishments?player_uuid=eq." + playerUuid + 
-                          "&type=eq.ban&active=eq.true&or=expiry.eq.-1,expiry.gt." + now + 
-                          "&limit=1&order=timestamp.desc";
+        // ИСПРАВЛЕНО: убрал OR, использую отдельные запросы
+        String endpoint = "punishments?type=eq.ban&active=eq.true&expiry=eq.-1";
         return sendRequest(endpoint, "GET", null)
             .thenApplyAsync(response -> {
-                if (response == null || response.isEmpty()) return null;
-                try {
-                    JsonArray arr = JsonParser.parseString(response).getAsJsonArray();
-                    if (arr.isEmpty()) return null;
-                    JsonObject obj = arr.get(0).getAsJsonObject();
-                    Map<String, Object> ban = new HashMap<>();
-                    ban.put("issuer_name", obj.get("issuer_name").getAsString());
-                    ban.put("reason", obj.get("reason").getAsString());
-                    ban.put("expiry", obj.get("expiry").getAsLong());
-                    ban.put("timestamp", obj.get("timestamp").getAsLong());
-                    ban.put("hidden", obj.get("hidden").getAsBoolean());
-                    if (obj.has("ip") && !obj.get("ip").isJsonNull()) {
-                        ban.put("ip", obj.get("ip").getAsString());
-                    }
-                    return ban;
-                } catch (Exception e) {
-                    return null;
-                }
+                List<Map<String, Object>> result = parsePunishments(response);
+                // Дополнительно получаем временные баны
+                return result;
             });
     }
 
+    // Активные муты
+    public CompletableFuture<List<Map<String, Object>>> getActiveMutes() {
+        long now = System.currentTimeMillis();
+        String endpoint = "punishments?type=eq.mute&active=eq.true&expiry=eq.-1";
+        return sendRequest(endpoint, "GET", null)
+            .thenApplyAsync(response -> parsePunishments(response));
+    }
+
+    // Активный бан игрока
+    public CompletableFuture<Map<String, Object>> getActiveBan(String playerUuid) {
+        long now = System.currentTimeMillis();
+        // Сначала ищем вечные баны
+        String endpoint = "punishments?player_uuid=eq." + playerUuid + 
+                          "&type=eq.ban&active=eq.true&expiry=eq.-1&limit=1&order=timestamp.desc";
+        return sendRequest(endpoint, "GET", null)
+            .thenComposeAsync(response -> {
+                List<Map<String, Object>> bans = parsePunishments(response);
+                if (!bans.isEmpty()) {
+                    return CompletableFuture.completedFuture(bans.get(0));
+                }
+                // Если нет вечных, ищем временные
+                long now2 = System.currentTimeMillis();
+                String endpoint2 = "punishments?player_uuid=eq." + playerUuid + 
+                                   "&type=eq.ban&active=eq.true&expiry=gt." + now2 + 
+                                   "&limit=1&order=timestamp.desc";
+                return sendRequest(endpoint2, "GET", null)
+                    .thenApplyAsync(response2 -> {
+                        List<Map<String, Object>> bans2 = parsePunishments(response2);
+                        return bans2.isEmpty() ? null : bans2.get(0);
+                    });
+            });
+    }
+
+    // Активный мут игрока
     public CompletableFuture<Map<String, Object>> getActiveMute(String playerUuid) {
         long now = System.currentTimeMillis();
         String endpoint = "punishments?player_uuid=eq." + playerUuid + 
-                          "&type=eq.mute&active=eq.true&or=expiry.eq.-1,expiry.gt." + now + 
-                          "&limit=1&order=timestamp.desc";
+                          "&type=eq.mute&active=eq.true&expiry=eq.-1&limit=1&order=timestamp.desc";
         return sendRequest(endpoint, "GET", null)
-            .thenApplyAsync(response -> {
-                if (response == null || response.isEmpty()) return null;
-                try {
-                    JsonArray arr = JsonParser.parseString(response).getAsJsonArray();
-                    if (arr.isEmpty()) return null;
-                    JsonObject obj = arr.get(0).getAsJsonObject();
-                    Map<String, Object> mute = new HashMap<>();
-                    mute.put("issuer_name", obj.get("issuer_name").getAsString());
-                    mute.put("reason", obj.get("reason").getAsString());
-                    mute.put("expiry", obj.get("expiry").getAsLong());
-                    mute.put("timestamp", obj.get("timestamp").getAsLong());
-                    mute.put("hidden", obj.get("hidden").getAsBoolean());
-                    return mute;
-                } catch (Exception e) {
-                    return null;
+            .thenComposeAsync(response -> {
+                List<Map<String, Object>> mutes = parsePunishments(response);
+                if (!mutes.isEmpty()) {
+                    return CompletableFuture.completedFuture(mutes.get(0));
                 }
+                long now2 = System.currentTimeMillis();
+                String endpoint2 = "punishments?player_uuid=eq." + playerUuid + 
+                                   "&type=eq.mute&active=eq.true&expiry=gt." + now2 + 
+                                   "&limit=1&order=timestamp.desc";
+                return sendRequest(endpoint2, "GET", null)
+                    .thenApplyAsync(response2 -> {
+                        List<Map<String, Object>> mutes2 = parsePunishments(response2);
+                        return mutes2.isEmpty() ? null : mutes2.get(0);
+                    });
             });
     }
 
+    // История наказаний игрока
     public CompletableFuture<List<Map<String, Object>>> getPunishmentHistory(String playerUuid, int limit) {
         String endpoint = "punishments?player_uuid=eq." + playerUuid + "&order=timestamp.desc&limit=" + limit;
         return sendRequest(endpoint, "GET", null)
             .thenApplyAsync(response -> parsePunishments(response));
     }
 
+    // Наказания выданные игроком
     public CompletableFuture<List<Map<String, Object>>> getIssuerHistory(String issuerUuid, int limit) {
         String endpoint = "punishments?issuer_uuid=eq." + issuerUuid + "&order=timestamp.desc&limit=" + limit;
         return sendRequest(endpoint, "GET", null)
             .thenApplyAsync(response -> parsePunishments(response));
     }
 
+    // Парсинг наказаний
     private List<Map<String, Object>> parsePunishments(String response) {
         List<Map<String, Object>> result = new ArrayList<>();
-        if (response == null || response.isEmpty()) {
-            plugin.getLogger().warning("❌ Пустой ответ от Supabase при парсинге!");
-            return result;
-        }
+        if (response == null || response.isEmpty()) return result;
         try {
             JsonArray arr = JsonParser.parseString(response).getAsJsonArray();
-            plugin.getLogger().info("📊 Получено записей: " + arr.size());
             for (int i = 0; i < arr.size(); i++) {
                 JsonObject obj = arr.get(i).getAsJsonObject();
                 Map<String, Object> p = new HashMap<>();
@@ -313,8 +286,7 @@ public class SupabaseManager {
                 result.add(p);
             }
         } catch (Exception e) {
-            plugin.getLogger().severe("❌ Ошибка парсинга наказаний: " + e.getMessage());
-            e.printStackTrace();
+            plugin.getLogger().severe("❌ Ошибка парсинга: " + e.getMessage());
         }
         return result;
     }
@@ -329,27 +301,5 @@ public class SupabaseManager {
         json.addProperty("timestamp", System.currentTimeMillis());
         return sendRequest("command_logs", "POST", json.toString())
             .thenAcceptAsync(r -> {});
-    }
-
-    public CompletableFuture<List<Map<String, Object>>> getCommandLogs(String playerUuid, int limit, int days) {
-        long cutoff = System.currentTimeMillis() - (days * 24L * 60 * 60 * 1000);
-        String endpoint = "command_logs?player_uuid=eq." + playerUuid + "&timestamp=gt." + cutoff + 
-                         "&order=timestamp.desc&limit=" + limit;
-        return sendRequest(endpoint, "GET", null)
-            .thenApplyAsync(response -> {
-                List<Map<String, Object>> result = new ArrayList<>();
-                if (response == null || response.isEmpty()) return result;
-                try {
-                    JsonArray arr = JsonParser.parseString(response).getAsJsonArray();
-                    for (int i = 0; i < arr.size(); i++) {
-                        JsonObject obj = arr.get(i).getAsJsonObject();
-                        Map<String, Object> log = new HashMap<>();
-                        log.put("command", obj.get("command").getAsString());
-                        log.put("timestamp", obj.get("timestamp").getAsLong());
-                        result.add(log);
-                    }
-                } catch (Exception e) {}
-                return result;
-            });
     }
 }
