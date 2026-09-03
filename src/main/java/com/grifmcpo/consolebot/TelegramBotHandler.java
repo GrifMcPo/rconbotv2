@@ -657,14 +657,14 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String expiryStr = expiry == -1 ? "навсегда" : punishmentManager.formatTimeLeft(expiry);
         boolean isPermanent = expiry == -1;
 
-        PunishmentManager.HistoryEntry entry = punishmentManager.getLastBan(playerName);
-        boolean isHidden = entry != null && entry.hidden;
-        boolean isIpBan = entry != null && entry.ipBan;
+        Map<String, Object> entry = punishmentManager.getLastBan(playerName);
+        boolean isHidden = entry != null && (boolean) entry.getOrDefault("hidden", false);
+        boolean isIpBan = entry != null && (boolean) entry.getOrDefault("ip_ban", false);
 
         String response = "[БОТ] Ответ от сервера:\n";
         response += "----- " + playerName + " -----\n";
         response += " Причина: " + reason + "\n";
-        response += " Время: " + punishmentManager.getFormattedDateTime(entry != null ? entry.timestamp : System.currentTimeMillis()) + "\n";
+        response += " Время: " + punishmentManager.getFormattedDateTime(entry != null ? (Long) entry.get("timestamp") : System.currentTimeMillis()) + "\n";
         response += " Истекает: " + expiryStr + "\n";
         response += " Сервер: выживание\n";
         response += " Выдал: " + issuer + "\n";
@@ -696,13 +696,13 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
         String expiryStr = expiry == -1 ? "навсегда" : punishmentManager.formatTimeLeft(expiry);
         boolean isPermanent = expiry == -1;
 
-        PunishmentManager.HistoryEntry entry = punishmentManager.getLastMute(playerName);
-        boolean isHidden = entry != null && entry.hidden;
+        Map<String, Object> entry = punishmentManager.getLastMute(playerName);
+        boolean isHidden = entry != null && (boolean) entry.getOrDefault("hidden", false);
 
         String response = "[БОТ] Ответ от сервера:\n";
         response += "----- " + playerName + " -----\n";
         response += " Причина: " + reason + "\n";
-        response += " Время: " + punishmentManager.getFormattedDateTime(entry != null ? entry.timestamp : System.currentTimeMillis()) + "\n";
+        response += " Время: " + punishmentManager.getFormattedDateTime(entry != null ? (Long) entry.get("timestamp") : System.currentTimeMillis()) + "\n";
         response += " Истекает: " + expiryStr + "\n";
         response += " Сервер: выживание\n";
         response += " Выдал: " + issuer + "\n";
@@ -1290,7 +1290,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         String action = parts[1].toLowerCase();
 
-        // Проверяем права (только группа owner)
         if (!groupManager.isOwner(userId)) {
             sendMessage(chatId, "[БОТ] У вас нет доступа к системе репортов!");
             sendMessage(chatId, "[БОТ] Доступ только у группы owner.");
@@ -1369,7 +1368,6 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
 
         String action = parts[1].toLowerCase();
 
-        // Проверяем права (только владелец с ID 8308522569)
         if (userId != plugin.getOwnerId()) {
             sendMessage(chatId, "[БОТ] ❌ Только владелец бота может управлять ботами!");
             sendMessage(chatId, "[БОТ] Ваш ID: " + userId + " | ID владельца: " + plugin.getOwnerId());
@@ -1608,14 +1606,31 @@ public class TelegramBotHandler extends TelegramLongPollingBot {
                 items = punishmentManager.getMuteList();
                 break;
             case "shist":
-                List<PunishmentManager.HistoryEntry> history = punishmentManager.getHistory(playerName);
-                for (PunishmentManager.HistoryEntry entry : history) {
-                    String timeAgo = punishmentManager.getTimeAgo(entry.timestamp);
-                    String status = entry.type.equals("ban") ?
+                List<Map<String, Object>> history = punishmentManager.getHistory(playerName);
+                for (Map<String, Object> entry : history) {
+                    String timeAgo = punishmentManager.getTimeAgo((Long) entry.get("timestamp"));
+                    String typeEntry = (String) entry.get("type");
+                    String issuer = (String) entry.get("issuer_name");
+                    String reason = (String) entry.get("reason");
+                    String duration = (String) entry.get("duration");
+                    boolean active = (Boolean) entry.get("active");
+                    
+                    String status = typeEntry.equals("ban") ?
                         (punishmentManager.isBanned(playerName) ? "[Активен]" : "[Истек]") :
                         (punishmentManager.isMuted(playerName) ? "[Активен]" : "[Истек]");
-                    items.add("- " + timeAgo + " -\n   " + playerName + " был " + entry.getActionName() +
-                            " на " + entry.duration + " " + entry.issuer + ": " + entry.reason + " " + status);
+                    
+                    String actionName = switch (typeEntry) {
+                        case "ban" -> "забанен";
+                        case "mute" -> "замучен";
+                        case "kick" -> "кикнут";
+                        case "warn" -> "предупрежден";
+                        case "unban" -> "разбанен";
+                        case "unmute" -> "размучен";
+                        default -> typeEntry;
+                    };
+                    
+                    items.add("- " + timeAgo + " -\n   " + playerName + " был " + actionName +
+                            " на " + duration + " " + issuer + ": " + reason + " " + status);
                 }
                 break;
             default: return;
