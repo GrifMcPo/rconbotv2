@@ -38,12 +38,18 @@ public class SupabaseManager {
                 String fullUrl = supabaseUrl + "/rest/v1/" + endpoint;
                 URL url = new URL(fullUrl);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod(method);
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Accept", "application/json");
                 conn.setRequestProperty("apikey", supabaseKey);
                 conn.setRequestProperty("Authorization", "Bearer " + supabaseKey);
                 conn.setDoInput(true);
+
+                if (method.equals("PATCH")) {
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+                } else {
+                    conn.setRequestMethod(method);
+                }
                 
                 if (body != null && !body.isEmpty()) {
                     conn.setDoOutput(true);

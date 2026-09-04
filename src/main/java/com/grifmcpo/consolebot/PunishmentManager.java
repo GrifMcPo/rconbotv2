@@ -374,31 +374,31 @@ public class PunishmentManager implements Listener {
                 if (playerUuid != null) {
                     supabase.deactivatePunishmentsByType(playerUuid, "ban");
                 }
+
+                supabase.getOrCreatePlayer(finalIssuer, null).thenAccept(issuerUuid -> {
+                    if (issuerUuid == null) issuerUuid = "CONSOLE";
+                    supabase.addPunishment(
+                        playerUuid != null ? playerUuid : "CONSOLE", finalPlayerName,
+                        "unban", issuerUuid, finalIssuer,
+                        finalReason, "навсегда", -1, -1,
+                        false, null
+                    );
+                });
+
+                bans.remove(finalPlayerName);
+                banIssuers.remove(finalPlayerName);
+                banReasons.remove(finalPlayerName);
+
+                if (finalBroadcast) {
+                    String msg = "§4❨！❩ §fИгрок §9" + finalIssuer + " §fразбанил §a" + finalPlayerName + 
+                                 " §fпо причине: §7" + getReason(finalReason) + " §8(глобальный)";
+                    Bukkit.broadcastMessage(colorize(msg));
+                }
+
+                if (adminLogger != null) {
+                    adminLogger.log("UNBAN", finalPlayerName, finalIssuer, finalReason, "навсегда", "ПУБЛИЧНО");
+                }
             });
-
-            supabase.getOrCreatePlayer(finalIssuer, null).thenAccept(issuerUuid -> {
-                if (issuerUuid == null) issuerUuid = "CONSOLE";
-                supabase.addPunishment(
-                    "UNKNOWN", finalPlayerName,
-                    "unban", issuerUuid, finalIssuer,
-                    finalReason, "навсегда", -1, -1,
-                    false, null
-                );
-            });
-
-            bans.remove(finalPlayerName);
-            banIssuers.remove(finalPlayerName);
-            banReasons.remove(finalPlayerName);
-
-            if (finalBroadcast) {
-                String msg = "§4❨！❩ §fИгрок §9" + finalIssuer + " §fразбанил §a" + finalPlayerName + 
-                             " §fпо причине: §7" + getReason(finalReason) + " §8(глобальный)";
-                Bukkit.broadcastMessage(colorize(msg));
-            }
-
-            if (adminLogger != null) {
-                adminLogger.log("UNBAN", finalPlayerName, finalIssuer, finalReason, "навсегда", "ПУБЛИЧНО");
-            }
         });
 
         return true;
@@ -491,36 +491,36 @@ public class PunishmentManager implements Listener {
                 if (playerUuid != null) {
                     supabase.deactivatePunishmentsByType(playerUuid, "mute");
                 }
+
+                supabase.getOrCreatePlayer(finalIssuer, null).thenAccept(issuerUuid -> {
+                    if (issuerUuid == null) issuerUuid = "CONSOLE";
+                    supabase.addPunishment(
+                        playerUuid != null ? playerUuid : "CONSOLE", finalPlayerName,
+                        "unmute", issuerUuid, finalIssuer,
+                        finalReason, "навсегда", -1, -1,
+                        false, null
+                    );
+                });
+
+                mutes.remove(finalPlayerName);
+                muteIssuers.remove(finalPlayerName);
+                muteReasons.remove(finalPlayerName);
+
+                if (finalBroadcast) {
+                    String msg = "§4❨！❩ §fИгрок §9" + finalIssuer + " §fразмутил §a" + finalPlayerName + 
+                                 " §fпо причине: §7" + getReason(finalReason) + " §8(глобальный)";
+                    Bukkit.broadcastMessage(colorize(msg));
+                }
+
+                Player player = Bukkit.getPlayer(finalPlayerName);
+                if (player != null && player.isOnline()) {
+                    player.sendMessage("§aВаш мут был снят!");
+                }
+
+                if (adminLogger != null) {
+                    adminLogger.log("UNMUTE", finalPlayerName, finalIssuer, finalReason, "навсегда", "ПУБЛИЧНО");
+                }
             });
-
-            supabase.getOrCreatePlayer(finalIssuer, null).thenAccept(issuerUuid -> {
-                if (issuerUuid == null) issuerUuid = "CONSOLE";
-                supabase.addPunishment(
-                    "UNKNOWN", finalPlayerName,
-                    "unmute", issuerUuid, finalIssuer,
-                    finalReason, "навсегда", -1, -1,
-                    false, null
-                );
-            });
-
-            mutes.remove(finalPlayerName);
-            muteIssuers.remove(finalPlayerName);
-            muteReasons.remove(finalPlayerName);
-
-            if (finalBroadcast) {
-                String msg = "§4❨！❩ §fИгрок §9" + finalIssuer + " §fразмутил §a" + finalPlayerName + 
-                             " §fпо причине: §7" + getReason(finalReason) + " §8(глобальный)";
-                Bukkit.broadcastMessage(colorize(msg));
-            }
-
-            Player player = Bukkit.getPlayer(finalPlayerName);
-            if (player != null && player.isOnline()) {
-                player.sendMessage("§aВаш мут был снят!");
-            }
-
-            if (adminLogger != null) {
-                adminLogger.log("UNMUTE", finalPlayerName, finalIssuer, finalReason, "навсегда", "ПУБЛИЧНО");
-            }
         });
 
         return true;
