@@ -370,8 +370,8 @@ public class PunishmentManager implements Listener {
         final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            supabase.getOrCreatePlayer(finalPlayerName, null).thenAccept(playerUuid -> {
-                if (playerUuid == null) playerUuid = "CONSOLE";
+            supabase.getOrCreatePlayer(finalPlayerName, null).thenAccept(uuid -> {
+                final String playerUuid = uuid != null ? uuid : "CONSOLE";
 
                 supabase.deactivatePunishmentsByType(playerUuid, "ban");
 
@@ -487,8 +487,8 @@ public class PunishmentManager implements Listener {
         final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            supabase.getOrCreatePlayer(finalPlayerName, null).thenAccept(playerUuid -> {
-                if (playerUuid == null) playerUuid = "CONSOLE";
+            supabase.getOrCreatePlayer(finalPlayerName, null).thenAccept(uuid -> {
+                final String playerUuid = uuid != null ? uuid : "CONSOLE";
 
                 supabase.deactivatePunishmentsByType(playerUuid, "mute");
 
