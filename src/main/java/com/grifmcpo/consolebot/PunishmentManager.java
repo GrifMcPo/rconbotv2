@@ -370,15 +370,15 @@ public class PunishmentManager implements Listener {
         final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            supabase.getPlayerUuidByName(finalPlayerName).thenAccept(playerUuid -> {
-                if (playerUuid != null) {
-                    supabase.deactivatePunishmentsByType(playerUuid, "ban");
-                }
+            supabase.getOrCreatePlayer(finalPlayerName, null).thenAccept(playerUuid -> {
+                if (playerUuid == null) playerUuid = "CONSOLE";
+
+                supabase.deactivatePunishmentsByType(playerUuid, "ban");
 
                 supabase.getOrCreatePlayer(finalIssuer, null).thenAccept(issuerUuid -> {
                     if (issuerUuid == null) issuerUuid = "CONSOLE";
                     supabase.addPunishment(
-                        playerUuid != null ? playerUuid : "CONSOLE", finalPlayerName,
+                        playerUuid, finalPlayerName,
                         "unban", issuerUuid, finalIssuer,
                         finalReason, "навсегда", -1, -1,
                         false, null
@@ -487,15 +487,15 @@ public class PunishmentManager implements Listener {
         final boolean finalBroadcast = broadcast;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
-            supabase.getPlayerUuidByName(finalPlayerName).thenAccept(playerUuid -> {
-                if (playerUuid != null) {
-                    supabase.deactivatePunishmentsByType(playerUuid, "mute");
-                }
+            supabase.getOrCreatePlayer(finalPlayerName, null).thenAccept(playerUuid -> {
+                if (playerUuid == null) playerUuid = "CONSOLE";
+
+                supabase.deactivatePunishmentsByType(playerUuid, "mute");
 
                 supabase.getOrCreatePlayer(finalIssuer, null).thenAccept(issuerUuid -> {
                     if (issuerUuid == null) issuerUuid = "CONSOLE";
                     supabase.addPunishment(
-                        playerUuid != null ? playerUuid : "CONSOLE", finalPlayerName,
+                        playerUuid, finalPlayerName,
                         "unmute", issuerUuid, finalIssuer,
                         finalReason, "навсегда", -1, -1,
                         false, null
