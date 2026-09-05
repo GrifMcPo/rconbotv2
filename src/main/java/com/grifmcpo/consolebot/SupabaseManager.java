@@ -4,11 +4,13 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
 import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
@@ -17,6 +19,9 @@ public class SupabaseManager {
     private final TelegramConsoleBot plugin;
     private final String supabaseUrl;
     private final String supabaseKey;
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
 
     public SupabaseManager(TelegramConsoleBot plugin) {
         this.plugin = plugin;
@@ -34,51 +39,52 @@ public class SupabaseManager {
     // ==== ОБЩИЙ МЕТОД ЗАПРОСА =====
     // =========================================================
     private CompletableFuture<String> sendRequest(String endpoint, String method, String body) {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                String fullUrl = supabaseUrl + "/rest/v1/" + endpoint;
-                URL url = new URL(fullUrl);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setRequestProperty("Accept", "application/json");
-                conn.setRequestProperty("apikey", supabaseKey);
-                conn.setRequestProperty("Authorization", "Bearer " + supabaseKey);
-                conn.setDoInput(true);
+        String fullUrl = supabaseUrl + "/rest/v1/" + endpoint;
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .uri(URI.create(fullUrl))
+                .timeout(Duration.ofSeconds(15))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .header("apikey", supabaseKey)
+                .header("Authorization", "Bearer " + supabaseKey);
 
-                if (method.equals("PATCH")) {
-                    try {
-                        conn.setRequestMethod("POST");
-                        java.lang.reflect.Field f = HttpURLConnection.class.getDeclaredField("method");
-                        f.setAccessible(true);
-                        f.set(conn, "PATCH");
-                    } catch (NoSuchFieldException | IllegalAccessException e) {
-                        plugin.getLogger().severe("❌ Cannot set PATCH method: " + e.getMessage());
+        HttpRequest.BodyPublisher bodyPublisher = (body != null && !body.isEmpty())
+                ? HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)
+                : HttpRequest.BodyPublishers.noBody();
+
+        switch (method) {
+            case "GET":
+                builder.GET();
+                break;
+            case "POST":
+                builder.POST(bodyPublisher);
+                break;
+            case "PATCH":
+                builder.method("PATCH", bodyPublisher);
+                break;
+            case "DELETE":
+                builder.DELETE();
+                break;
+            default:
+                builder.GET();
+        }
+
+        HttpRequest request = builder.build();
+
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApplyAsync(response -> {
+                    int code = response.statusCode();
+                    if (code >= 200 && code < 300) {
+                        return response.body();
+                    } else {
+                        plugin.getLogger().warning("❌ Supabase ошибка: " + code + " - " + response.body());
                         return null;
                     }
-                } else {
-                    conn.setRequestMethod(method);
-                }
-
-                if (body != null && !body.isEmpty()) {
-                    conn.setDoOutput(true);
-                    try (OutputStream os = conn.getOutputStream()) {
-                        os.write(body.getBytes(StandardCharsets.UTF_8));
-                    }
-                }
-
-                int responseCode = conn.getResponseCode();
-                if (responseCode >= 200 && responseCode < 300) {
-                    return new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                } else {
-                    String error = new String(conn.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
-                    plugin.getLogger().warning("❌ Supabase ошибка: " + responseCode + " - " + error);
+                })
+                .exceptionallyAsync(e -> {
+                    plugin.getLogger().severe("❌ Supabase request error: " + e.getMessage());
                     return null;
-                }
-            } catch (Exception e) {
-                plugin.getLogger().severe("❌ Supabase request error: " + e.getMessage());
-                return null;
-            }
-        });
+                });
     }
 
     private String encode(String value) {
