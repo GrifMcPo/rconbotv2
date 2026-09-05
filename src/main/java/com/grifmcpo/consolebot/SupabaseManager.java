@@ -45,7 +45,19 @@ public class SupabaseManager {
                 conn.setRequestProperty("Authorization", "Bearer " + supabaseKey);
                 conn.setDoInput(true);
 
-                conn.setRequestMethod(method);
+                if (method.equals("PATCH")) {
+                    try {
+                        conn.setRequestMethod("POST");
+                        java.lang.reflect.Field f = HttpURLConnection.class.getDeclaredField("method");
+                        f.setAccessible(true);
+                        f.set(conn, "PATCH");
+                    } catch (NoSuchFieldException | IllegalAccessException e) {
+                        plugin.getLogger().severe("❌ Cannot set PATCH method: " + e.getMessage());
+                        return null;
+                    }
+                } else {
+                    conn.setRequestMethod(method);
+                }
 
                 if (body != null && !body.isEmpty()) {
                     conn.setDoOutput(true);
