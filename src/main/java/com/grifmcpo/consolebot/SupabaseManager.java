@@ -44,6 +44,11 @@ public class SupabaseManager {
                 conn.setRequestProperty("Authorization", "Bearer " + supabaseKey);
                 conn.setDoInput(true);
 
+                // Добавляем Prefer для POST-запросов чтобы Supabase возвращал representation
+                if ("POST".equalsIgnoreCase(method)) {
+                    conn.setRequestProperty("Prefer", "return=representation");
+                }
+
                 if (method.equals("PATCH")) {
                     conn.setRequestMethod("POST");
                     conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
@@ -166,6 +171,12 @@ public class SupabaseManager {
             String reason, String duration, long durationMs, long expiry,
             boolean hidden, String ip) {
         
+        // Защита: не посылаем в Supabase пустой/нулевой player_uuid
+        if (playerUuid == null || playerUuid.isEmpty()) {
+            plugin.getLogger().warning("❌ addPunishment called with null/empty playerUuid (type=" + type + ", player=" + playerName + "). Aborting Supabase insert.");
+            return CompletableFuture.completedFuture(-1L);
+        }
+
         JsonObject json = new JsonObject();
         json.addProperty("player_uuid", playerUuid);
         json.addProperty("player_name", playerName);
