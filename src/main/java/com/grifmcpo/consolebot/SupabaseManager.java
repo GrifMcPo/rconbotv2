@@ -131,6 +131,32 @@ public class SupabaseManager {
             .thenApplyAsync(r -> r != null);
     }
 
+    // --- NEW: get player's telegram_id by player_name
+    public CompletableFuture<String> getPlayerTelegramIdByName(String name) {
+        return sendRequest("players?player_name=eq." + name, "GET", null)
+            .thenApplyAsync(response -> {
+                if (response == null || response.isEmpty()) return null;
+                try {
+                    JsonArray arr = JsonParser.parseString(response).getAsJsonArray();
+                    if (arr.isEmpty()) return null;
+                    JsonObject obj = arr.get(0).getAsJsonObject();
+                    if (obj.has("telegram_id") && !obj.get("telegram_id").isJsonNull()) {
+                        return obj.get("telegram_id").getAsString();
+                    }
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Ошибка получения telegram_id: " + e.getMessage());
+                }
+                return null;
+            });
+    }
+
+    // --- NEW: delete bot_bans entry by telegram_id
+    public CompletableFuture<Boolean> deleteBotBanByTelegramId(String telegramId) {
+        if (telegramId == null || telegramId.isEmpty()) return CompletableFuture.completedFuture(false);
+        return sendRequest("bot_bans?telegram_id=eq." + telegramId, "DELETE", null)
+            .thenApplyAsync(r -> r != null);
+    }
+
     // =========================================================
     // ==== НАКАЗАНИЯ =====
     // =========================================================
